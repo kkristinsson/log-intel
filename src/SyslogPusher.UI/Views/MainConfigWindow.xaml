@@ -1,0 +1,96 @@
+<Window x:Class="SyslogPusher.UI.Views.MainConfigWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:SyslogPusher.UI.Controls"
+        Title="Syslog Pusher — Kristinsson Consulting AB"
+        Height="680" Width="920"
+        MinHeight="560" MinWidth="780"
+        Icon="/Assets/logo.png"
+        Background="{StaticResource SurfaceBrush}">
+    <DockPanel Margin="16">
+        <controls:BrandFooter DockPanel.Dock="Bottom" Margin="0,12,0,0"/>
+
+        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,8">
+            <Button x:Name="InstallServiceButton" Content="Install service" Click="OnInstallService" Visibility="Collapsed"/>
+            <Button x:Name="RestartServiceButton" Content="Restart service" Style="{StaticResource SecondaryButton}"/>
+            <Button x:Name="SaveButton" Content="Save" Click="OnSave" IsDefault="True"/>
+            <Button Content="Close" Click="OnClose" IsCancel="True" Style="{StaticResource SecondaryButton}"/>
+        </StackPanel>
+
+        <controls:BrandHeader DockPanel.Dock="Top"
+                                Subtitle="Configuration — forward Windows events and log files to syslog"/>
+
+        <TextBlock DockPanel.Dock="Top" x:Name="StatusText" Margin="0,0,0,12" Foreground="{StaticResource MutedTextBrush}"/>
+
+        <TabControl>
+            <TabItem Header="Syslog server">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="8">
+                    <StackPanel MaxWidth="520">
+                        <TextBlock Text="Host" FontWeight="SemiBold"/>
+                        <TextBox x:Name="HostTextBox"/>
+                        <TextBlock Text="Port" FontWeight="SemiBold"/>
+                        <TextBox x:Name="PortTextBox"/>
+                        <TextBlock Text="Protocol" FontWeight="SemiBold"/>
+                        <ComboBox x:Name="ProtocolComboBox">
+                            <ComboBoxItem Content="UDP"/>
+                            <ComboBoxItem Content="TCP"/>
+                        </ComboBox>
+                        <TextBlock Text="Syslog hostname" FontWeight="SemiBold"/>
+                        <TextBox x:Name="HostnameTextBox"/>
+                        <TextBlock Text="Application name" FontWeight="SemiBold"/>
+                        <TextBox x:Name="AppNameTextBox"/>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem Header="Windows events">
+                <DockPanel Margin="8">
+                    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,8">
+                        <Button Content="Add" Click="OnAddEventSource"/>
+                        <Button Content="Remove" Click="OnRemoveEventSource" Style="{StaticResource SecondaryButton}"/>
+                    </StackPanel>
+                    <DataGrid x:Name="EventSourcesGrid"
+                              AutoGenerateColumns="False"
+                              CanUserAddRows="False"
+                              SelectionMode="Single">
+                        <DataGrid.Columns>
+                            <DataGridCheckBoxColumn Header="Enabled" Binding="{Binding Enabled}" Width="70"/>
+                            <DataGridTextColumn Header="Log name" Binding="{Binding LogName}" Width="160"/>
+                            <DataGridTextColumn Header="Providers (comma-separated)" Binding="{Binding ProvidersDisplay}" Width="*"/>
+                            <DataGridTextColumn Header="Event IDs (comma-separated)" Binding="{Binding EventIdsDisplay}" Width="180"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </DockPanel>
+            </TabItem>
+
+            <TabItem Header="Log directories">
+                <DockPanel Margin="8">
+                    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,8">
+                        <Button Content="Add" Click="OnAddDirectoryWatch"/>
+                        <Button Content="Remove" Click="OnRemoveDirectoryWatch" Style="{StaticResource SecondaryButton}"/>
+                    </StackPanel>
+                    <DataGrid x:Name="DirectoryWatchesGrid"
+                              AutoGenerateColumns="False"
+                              CanUserAddRows="False"
+                              SelectionMode="Single">
+                        <DataGrid.Columns>
+                            <DataGridCheckBoxColumn Header="Enabled" Binding="{Binding Enabled}" Width="70"/>
+                            <DataGridTextColumn Header="Path" Binding="{Binding Path}" Width="*"/>
+                            <DataGridTextColumn Header="Mode (All files / Matched files only)" Binding="{Binding Mode}" Width="220"/>
+                            <DataGridTextColumn Header="Patterns" Binding="{Binding PatternsDisplay}" Width="180"/>
+                            <DataGridCheckBoxColumn Header="Subdirs" Binding="{Binding IncludeSubdirectories}" Width="70"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </DockPanel>
+            </TabItem>
+
+            <TabItem Header="File handling">
+                <StackPanel Margin="12" MaxWidth="520">
+                    <CheckBox x:Name="IgnoreBinaryCheckBox" Content="Ignore binary files" Margin="0,0,0,8"/>
+                    <TextBlock Text="Binary detection sample size (bytes)" FontWeight="SemiBold"/>
+                    <TextBox x:Name="BinarySampleTextBox"/>
+                </StackPanel>
+            </TabItem>
+        </TabControl>
+    </DockPanel>
+</Window>

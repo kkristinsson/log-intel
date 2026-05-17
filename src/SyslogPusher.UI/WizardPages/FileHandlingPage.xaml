@@ -1,0 +1,10 @@
+<Page x:Class="SyslogPusher.UI.WizardPages.FileHandlingPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      Title="FileHandling">
+    <StackPanel Margin="8" MaxWidth="520">
+        <CheckBox x:Name="IgnoreBinaryCheckBox" Content="Ignore binary files" IsChecked="True" Margin="0,0,0,8"/>
+        <TextBlock Text="Binary detection sample size (bytes)" FontWeight="SemiBold"/>
+        <TextBox x:Name="BinarySampleTextBox" Text="8192"/>
+    </StackPanel>
+</Page>

@@ -1,0 +1,27 @@
+<Page x:Class="SyslogPusher.UI.WizardPages.WelcomePage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:branding="clr-namespace:SyslogPusher.UI"
+      Title="Welcome">
+    <StackPanel Margin="8" MaxWidth="640">
+        <Image Source="/Assets/logo.png"
+               Width="96" Height="96"
+               HorizontalAlignment="Left"
+               Margin="0,0,0,16"/>
+        <TextBlock Text="Welcome to Syslog Pusher"
+                   FontSize="18"
+                   FontWeight="SemiBold"
+                   Margin="0,0,0,8"/>
+        <TextBlock TextWrapping="Wrap" FontSize="14" LineHeight="22" Foreground="#334155">
+            Syslog Pusher runs as a Windows service and forwards:
+            <LineBreak/>• Selected Windows event logs
+            <LineBreak/>• New lines from watched log file directories
+            <LineBreak/><LineBreak/>
+            All settings are managed through this graphical application — no manual editing of configuration files.
+            <LineBreak/><LineBreak/>
+            <Run FontWeight="SemiBold" Text="{x:Static branding:Branding.WrittenByLine}"/>
+            <LineBreak/>
+            <Run Text="{x:Static branding:Branding.CopyrightLine}"/>
+        </TextBlock>
+    </StackPanel>
+</Page>

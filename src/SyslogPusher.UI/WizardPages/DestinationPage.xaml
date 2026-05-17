@@ -1,0 +1,20 @@
+<Page x:Class="SyslogPusher.UI.WizardPages.DestinationPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      Title="Destination">
+    <StackPanel Margin="8" MaxWidth="520">
+        <TextBlock Text="Host" FontWeight="SemiBold"/>
+        <TextBox x:Name="HostTextBox" Text="127.0.0.1"/>
+        <TextBlock Text="Port" FontWeight="SemiBold"/>
+        <TextBox x:Name="PortTextBox" Text="514"/>
+        <TextBlock Text="Protocol" FontWeight="SemiBold"/>
+        <ComboBox x:Name="ProtocolComboBox">
+            <ComboBoxItem Content="UDP" IsSelected="True"/>
+            <ComboBoxItem Content="TCP"/>
+        </ComboBox>
+        <TextBlock Text="Syslog hostname" FontWeight="SemiBold"/>
+        <TextBox x:Name="HostnameTextBox"/>
+        <TextBlock Text="Application name" FontWeight="SemiBold"/>
+        <TextBox x:Name="AppNameTextBox" Text="SyslogPusher"/>
+    </StackPanel>
+</Page>

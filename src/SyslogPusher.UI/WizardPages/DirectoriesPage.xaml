@@ -1,0 +1,23 @@
+<Page x:Class="SyslogPusher.UI.WizardPages.DirectoriesPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      Title="Directories">
+    <DockPanel Margin="8">
+        <StackPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+            <TextBlock TextWrapping="Wrap" Margin="0,0,0,8"
+                       Text="Watch directories for log files. Use mode 'All files' to ship every file, or 'Matched files only' with patterns such as *.log."/>
+            <StackPanel Orientation="Horizontal">
+                <Button Content="Add folder" Click="OnAdd"/>
+                <Button Content="Remove" Click="OnRemove"/>
+            </StackPanel>
+        </StackPanel>
+        <DataGrid x:Name="Grid" AutoGenerateColumns="False" CanUserAddRows="False">
+            <DataGrid.Columns>
+                <DataGridCheckBoxColumn Header="Enabled" Binding="{Binding Enabled}" Width="70"/>
+                <DataGridTextColumn Header="Path" Binding="{Binding Path}" Width="*"/>
+                <DataGridTextColumn Header="Mode" Binding="{Binding Mode}" Width="180"/>
+                <DataGridTextColumn Header="Patterns" Binding="{Binding PatternsDisplay}" Width="160"/>
+            </DataGrid.Columns>
+        </DataGrid>
+    </DockPanel>
+</Page>

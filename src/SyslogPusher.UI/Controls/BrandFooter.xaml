@@ -1,0 +1,9 @@
+<UserControl x:Class="SyslogPusher.UI.Controls.BrandFooter"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <TextBlock HorizontalAlignment="Center"
+               FontSize="11"
+               Foreground="{StaticResource MutedTextBrush}"
+               Text="{x:Static branding:Branding.FooterLine}"
+               xmlns:branding="clr-namespace:SyslogPusher.UI"/>
+</UserControl>
