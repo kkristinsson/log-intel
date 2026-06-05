@@ -1,18 +1,13 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <OutputType>WinExe</OutputType>
+    <OutputType>Library</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
-    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
-    <AssemblyName>SyslogPusher</AssemblyName>
+    <EnableDefaultApplicationDefinition>false</EnableDefaultApplicationDefinition>
+    <AssemblyName>SyslogPusher.UI</AssemblyName>
     <RootNamespace>SyslogPusher.UI</RootNamespace>
-    <StartupObject>SyslogPusher.UI.Program</StartupObject>
-    <Company>Kristinsson Consulting AB</Company>
-    <Product>Syslog Pusher</Product>
-    <Copyright>Copyright © Kristinsson Consulting AB 2026</Copyright>
-    <Description>Forward Windows events and log files to a remote syslog server.</Description>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\SyslogPusher.Core\SyslogPusher.Core.csproj" />

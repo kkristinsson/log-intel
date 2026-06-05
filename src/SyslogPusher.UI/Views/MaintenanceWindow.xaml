@@ -5,7 +5,7 @@
         Title="Syslog Pusher Maintenance — Kristinsson Consulting AB"
         Height="560" Width="680"
         MinHeight="500" MinWidth="600"
-        Icon="/Assets/logo.png"
+        Icon="pack://application:,,,/SyslogPusher.UI;component/Assets/logo.png"
         Background="{StaticResource SurfaceBrush}"
         WindowStartupLocation="CenterScreen">
     <DockPanel Margin="16">
@@ -41,7 +41,7 @@
                                    Foreground="#334155"
                                    LineHeight="22"
                                    Margin="0,0,0,12"
-                                   Text="Point the installed service at this executable and restart it. Use this when deploying a new SyslogPusher.exe. Configuration is kept."/>
+                                   Text="Point the installed service at this SyslogPusher.exe and restart it. Use when deploying a new build. Configuration is kept."/>
                         <Button x:Name="UpgradeButton"
                                 Content="Upgrade"
                                 Click="OnUpgrade"

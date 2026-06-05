@@ -5,7 +5,7 @@
         Title="Syslog Pusher Setup — Kristinsson Consulting AB"
         Height="660" Width="840"
         MinHeight="540" MinWidth="720"
-        Icon="/Assets/logo.png"
+        Icon="pack://application:,,,/SyslogPusher.UI;component/Assets/logo.png"
         Background="{StaticResource SurfaceBrush}"
         Closing="OnClosing">
     <DockPanel Margin="16">

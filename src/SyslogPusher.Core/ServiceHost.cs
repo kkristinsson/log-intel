@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -9,6 +10,8 @@ public static class ServiceHost
 {
     public static Task RunAsync(string[] args)
     {
+        AppDomain.CurrentDomain.UnhandledException += OnUnhandledException;
+
         var builder = Host.CreateApplicationBuilder(args);
         builder.Services.AddWindowsService(options =>
         {
@@ -25,5 +28,25 @@ public static class ServiceHost
         builder.Services.AddHostedService<ForwardingWorker>();
 
         return builder.Build().RunAsync();
+    }
+
+    private static void OnUnhandledException(object sender, UnhandledExceptionEventArgs e)
+    {
+        try
+        {
+            var message = e.ExceptionObject?.ToString() ?? "Unknown error";
+            if (message.Length > 30000)
+                message = message[..30000];
+
+            EventLog.WriteEntry(
+                AppPaths.ServiceDisplayName,
+                message,
+                EventLogEntryType.Error,
+                5000);
+        }
+        catch
+        {
+            // Best effort only.
+        }
     }
 }

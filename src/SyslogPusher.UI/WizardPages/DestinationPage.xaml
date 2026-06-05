@@ -14,7 +14,5 @@
         </ComboBox>
         <TextBlock Text="Syslog hostname" FontWeight="SemiBold"/>
         <TextBox x:Name="HostnameTextBox"/>
-        <TextBlock Text="Application name" FontWeight="SemiBold"/>
-        <TextBox x:Name="AppNameTextBox" Text="SyslogPusher"/>
     </StackPanel>
 </Page>

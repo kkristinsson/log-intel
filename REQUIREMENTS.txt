@@ -16,8 +16,8 @@ Hardware
 Runtime (target machines)
 -------------------------
 The published application (dist\SyslogPusher.exe) is a single self-contained
-executable that bundles the .NET 8 runtime (win-x64). Target machines do
-NOT need a separate .NET install.
+executable that bundles the .NET 8 runtime (win-x64). Target machines do NOT
+need a separate .NET install.
 
 Build machine (only needed to compile from source)
 --------------------------------------------------

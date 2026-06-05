@@ -27,12 +27,9 @@ cd syslogpusher
 .\scripts\publish.ps1
 ```
 
-Output is a **single file**: `dist\SyslogPusher.exe` (~70–80 MB) with the .NET 8
-runtime bundled (self-contained, win-x64). Target machines do not need a separate
-.NET install.
+Output is a **single file**: `dist\SyslogPusher.exe` (self-contained, win-x64). Target machines do not need a separate .NET install.
 
-The same executable provides the configuration UI; the Windows service runs it
-with the `--service` argument (configured automatically by the install wizard).
+The same executable opens the configuration UI when run interactively, and runs as the Windows service when started by the Service Control Manager (no WPF loaded in service mode).
 
 ## Install
 

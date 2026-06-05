@@ -14,7 +14,6 @@ public static class StartupRouter
         var forceWizard = HasArg(args, "--wizard");
         var forceMaintenance = HasArg(args, "--maintenance")
             || HasArg(args, "--uninstall");
-        var isAdmin = AdminHelper.IsRunningAsAdministrator();
         var isInstalled = WindowsServiceManager.IsInstalled();
 
         if (forceConfigure)
@@ -23,7 +22,7 @@ public static class StartupRouter
         if (forceWizard)
             return new InstallWizardWindow();
 
-        if (forceMaintenance || (isAdmin && isInstalled))
+        if (forceMaintenance || isInstalled)
             return new MaintenanceWindow();
 
         if (!ConfigurationStore.Exists())

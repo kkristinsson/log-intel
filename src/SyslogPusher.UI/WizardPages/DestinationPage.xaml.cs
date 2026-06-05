@@ -36,6 +36,5 @@ public partial class DestinationPage : Page
             HostTextBox,
             PortTextBox,
             ProtocolComboBox,
-            HostnameTextBox,
-            AppNameTextBox);
+            HostnameTextBox);
 }

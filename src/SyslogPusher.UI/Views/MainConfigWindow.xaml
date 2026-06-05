@@ -5,13 +5,14 @@
         Title="Syslog Pusher — Kristinsson Consulting AB"
         Height="680" Width="920"
         MinHeight="560" MinWidth="780"
-        Icon="/Assets/logo.png"
+        Icon="pack://application:,,,/SyslogPusher.UI;component/Assets/logo.png"
         Background="{StaticResource SurfaceBrush}">
     <DockPanel Margin="16">
         <controls:BrandFooter DockPanel.Dock="Bottom" Margin="0,12,0,0"/>
 
         <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,8">
             <Button x:Name="InstallServiceButton" Content="Install service" Click="OnInstallService" Visibility="Collapsed"/>
+            <Button x:Name="MaintenanceButton" Content="Upgrade / Uninstall" Click="OnOpenMaintenance" Visibility="Collapsed" Style="{StaticResource SecondaryButton}"/>
             <Button x:Name="RestartServiceButton" Content="Restart service" Style="{StaticResource SecondaryButton}"/>
             <Button x:Name="SaveButton" Content="Save" Click="OnSave" IsDefault="True"/>
             <Button Content="Close" Click="OnClose" IsCancel="True" Style="{StaticResource SecondaryButton}"/>
@@ -37,8 +38,6 @@
                         </ComboBox>
                         <TextBlock Text="Syslog hostname" FontWeight="SemiBold"/>
                         <TextBox x:Name="HostnameTextBox"/>
-                        <TextBlock Text="Application name" FontWeight="SemiBold"/>
-                        <TextBox x:Name="AppNameTextBox"/>
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>

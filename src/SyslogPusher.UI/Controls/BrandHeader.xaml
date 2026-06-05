@@ -16,7 +16,7 @@
                     Background="White"
                     Padding="4"
                     VerticalAlignment="Center">
-                <Image Source="/Assets/logo.png"
+                <Image Source="pack://application:,,,/SyslogPusher.UI;component/Assets/logo.png"
                        Stretch="Uniform"/>
             </Border>
             <StackPanel Grid.Column="1" Margin="14,0,0,0" VerticalAlignment="Center">

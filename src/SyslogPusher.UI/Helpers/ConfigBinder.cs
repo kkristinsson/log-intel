@@ -11,14 +11,12 @@ public static class ConfigBinder
         TextBox host,
         TextBox port,
         ComboBox protocol,
-        TextBox hostname,
-        TextBox appName)
+        TextBox hostname)
     {
         host.Text = config.Destination.Host;
         port.Text = config.Destination.Port.ToString();
         protocol.SelectedIndex = config.Destination.Protocol == SyslogProtocol.Tcp ? 1 : 0;
         hostname.Text = config.Destination.Hostname;
-        appName.Text = config.Destination.AppName;
     }
 
     public static void ReadDestination(
@@ -26,8 +24,7 @@ public static class ConfigBinder
         TextBox host,
         TextBox port,
         ComboBox protocol,
-        TextBox hostname,
-        TextBox appName)
+        TextBox hostname)
     {
         config.Destination.Host = host.Text.Trim();
         config.Destination.Port = int.TryParse(port.Text, out var p) ? p : 514;
@@ -37,9 +34,6 @@ public static class ConfigBinder
         config.Destination.Hostname = string.IsNullOrWhiteSpace(hostname.Text)
             ? Environment.MachineName
             : hostname.Text.Trim();
-        config.Destination.AppName = string.IsNullOrWhiteSpace(appName.Text)
-            ? "SyslogPusher"
-            : appName.Text.Trim();
     }
 
     public static void BindFileHandling(AppConfiguration config, CheckBox ignoreBinary, TextBox sampleBytes)

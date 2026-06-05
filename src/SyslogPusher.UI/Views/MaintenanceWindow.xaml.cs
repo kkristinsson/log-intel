@@ -15,18 +15,9 @@ public partial class MaintenanceWindow : Window
 
     private void RefreshStatus()
     {
-        if (!AdminHelper.IsRunningAsAdministrator())
-        {
-            StatusText.Text =
-                "Administrator privileges are required. Close and run SyslogPusher.exe as Administrator.";
-            UpgradeButton.IsEnabled = false;
-            UninstallButton.IsEnabled = false;
-            return;
-        }
-
         if (!WindowsServiceManager.IsInstalled())
         {
-            StatusText.Text = "Syslog Pusher is not installed. Run setup without administrator privileges.";
+            StatusText.Text = "Syslog Pusher is not installed. Close this window to run setup.";
             UpgradeButton.IsEnabled = false;
             UninstallButton.IsEnabled = false;
             return;
@@ -35,11 +26,14 @@ public partial class MaintenanceWindow : Window
         var status = WindowsServiceManager.GetStatus();
         var currentPath = WindowsServiceManager.GetConfiguredBinaryPath() ?? "(unknown)";
         var newPath = AppPaths.GetServiceBinaryPath();
+        var adminNote = AdminHelper.IsRunningAsAdministrator()
+            ? string.Empty
+            : $"{Environment.NewLine}Upgrade and uninstall will ask for Administrator privileges.";
 
         StatusText.Text =
             $"Service status: {status}{Environment.NewLine}" +
             $"Current service command: {currentPath}{Environment.NewLine}" +
-            $"This executable: {newPath}";
+            $"This executable: {newPath}{adminNote}";
 
         UpgradeButton.IsEnabled = true;
         UninstallButton.IsEnabled = true;

@@ -4,7 +4,7 @@
       xmlns:branding="clr-namespace:SyslogPusher.UI"
       Title="Welcome">
     <StackPanel Margin="8" MaxWidth="640">
-        <Image Source="/Assets/logo.png"
+        <Image Source="pack://application:,,,/SyslogPusher.UI;component/Assets/logo.png"
                Width="96" Height="96"
                HorizontalAlignment="Left"
                Margin="0,0,0,16"/>

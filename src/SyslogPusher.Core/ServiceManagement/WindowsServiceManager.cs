@@ -156,8 +156,7 @@ public static class WindowsServiceManager
 
     private static void RunScCreate()
     {
-        // sc.exe parses one command line; ArgumentList splits "Syslog Pusher" and breaks start= auto.
-        // Space after '=' is required. binPath must include --service inside its quotes.
+        // sc.exe parses one command line; space after '=' is required.
         var arguments =
             $"create {AppPaths.ServiceName} " +
             $"binPath= \"{AppPaths.GetScCreateBinPathValue()}\" " +

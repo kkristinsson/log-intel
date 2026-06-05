@@ -30,8 +30,7 @@ public partial class MainConfigWindow : Window
             HostTextBox,
             PortTextBox,
             ProtocolComboBox,
-            HostnameTextBox,
-            AppNameTextBox);
+            HostnameTextBox);
         ConfigBinder.BindFileHandling(_configuration, IgnoreBinaryCheckBox, BinarySampleTextBox);
 
         _eventRows.Clear();
@@ -63,11 +62,20 @@ public partial class MainConfigWindow : Window
         }
 
         InstallServiceButton.Visibility = Visibility.Collapsed;
+        MaintenanceButton.Visibility = Visibility.Visible;
         RestartServiceButton.Visibility = Visibility.Visible;
 
         var status = WindowsServiceManager.GetStatus();
         StatusText.Text = $"Service status: {status}. Configuration file: {AppPaths.ConfigFilePath}";
-        RestartServiceButton.IsEnabled = status == System.ServiceProcess.ServiceControllerStatus.Running;
+        RestartServiceButton.IsEnabled = status == System.ServiceProcess.ServiceControllerStatus.Running
+            && AdminHelper.IsRunningAsAdministrator();
+    }
+
+    private void OnOpenMaintenance(object sender, RoutedEventArgs e)
+    {
+        var maintenance = new MaintenanceWindow { Owner = this };
+        maintenance.ShowDialog();
+        RefreshStatus();
     }
 
     private void OnInstallService(object sender, RoutedEventArgs e)
@@ -130,8 +138,7 @@ public partial class MainConfigWindow : Window
             HostTextBox,
             PortTextBox,
             ProtocolComboBox,
-            HostnameTextBox,
-            AppNameTextBox);
+            HostnameTextBox);
         ConfigBinder.ReadFileHandling(_configuration, IgnoreBinaryCheckBox, BinarySampleTextBox);
 
         _configuration.EventSources = _eventRows
