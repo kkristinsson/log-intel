@@ -64,6 +64,9 @@
 
             <TabItem Header="Log directories">
                 <DockPanel Margin="8">
+                    <TextBlock DockPanel.Dock="Top" TextWrapping="Wrap" Margin="0,0,0,8"
+                               Foreground="{StaticResource MutedTextBrush}"
+                               Text="Only new: on service start, skip existing file content for that directory (seek to end of file). Enable for folders with large historical logs (e.g. Pri.log). Other watches are unchanged. Pair with syslogb timestamp parsers on the collector."/>
                     <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,8">
                         <Button Content="Add" Click="OnAddDirectoryWatch"/>
                         <Button Content="Remove" Click="OnRemoveDirectoryWatch" Style="{StaticResource SecondaryButton}"/>
@@ -76,8 +79,9 @@
                             <DataGridCheckBoxColumn Header="Enabled" Binding="{Binding Enabled}" Width="70"/>
                             <DataGridTextColumn Header="Path" Binding="{Binding Path}" Width="*"/>
                             <DataGridTextColumn Header="Mode (All files / Matched files only)" Binding="{Binding Mode}" Width="220"/>
-                            <DataGridTextColumn Header="Patterns" Binding="{Binding PatternsDisplay}" Width="180"/>
+                            <DataGridTextColumn Header="Patterns" Binding="{Binding PatternsDisplay}" Width="160"/>
                             <DataGridCheckBoxColumn Header="Subdirs" Binding="{Binding IncludeSubdirectories}" Width="70"/>
+                            <DataGridCheckBoxColumn Header="Only new" Binding="{Binding OnlyPushNewEvents}" Width="80"/>
                         </DataGrid.Columns>
                     </DataGrid>
                 </DockPanel>

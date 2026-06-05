@@ -5,7 +5,7 @@
     <DockPanel Margin="8">
         <StackPanel DockPanel.Dock="Top" Margin="0,0,0,8">
             <TextBlock TextWrapping="Wrap" Margin="0,0,0,8"
-                       Text="Watch directories for log files. Use mode 'All files' to ship every file, or 'Matched files only' with patterns such as *.log."/>
+                       Text="Watch directories for log files. Use mode 'All files' to ship every file, or 'Matched files only' with patterns such as *.log. Enable Only new for folders with large historical logs (e.g. Pri.log) to skip existing content on service start."/>
             <StackPanel Orientation="Horizontal">
                 <Button Content="Add folder" Click="OnAdd"/>
                 <Button Content="Remove" Click="OnRemove"/>
@@ -16,7 +16,8 @@
                 <DataGridCheckBoxColumn Header="Enabled" Binding="{Binding Enabled}" Width="70"/>
                 <DataGridTextColumn Header="Path" Binding="{Binding Path}" Width="*"/>
                 <DataGridTextColumn Header="Mode" Binding="{Binding Mode}" Width="180"/>
-                <DataGridTextColumn Header="Patterns" Binding="{Binding PatternsDisplay}" Width="160"/>
+                <DataGridTextColumn Header="Patterns" Binding="{Binding PatternsDisplay}" Width="140"/>
+                <DataGridCheckBoxColumn Header="Only new" Binding="{Binding OnlyPushNewEvents}" Width="80"/>
             </DataGrid.Columns>
         </DataGrid>
     </DockPanel>

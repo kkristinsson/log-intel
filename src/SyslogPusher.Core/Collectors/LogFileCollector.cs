@@ -112,7 +112,9 @@ public sealed class LogFileCollector : IAsyncDisposable
                 FileShare.ReadWrite | FileShare.Delete);
 
             var startPosition = initial
-                ? Math.Max(0, stream.Length - watch.TailFromEndBytes)
+                ? (watch.OnlyPushNewEvents
+                    ? stream.Length
+                    : Math.Max(0, stream.Length - watch.TailFromEndBytes))
                 : _filePositions.GetOrAdd(path, stream.Length);
 
             if (startPosition > stream.Length)

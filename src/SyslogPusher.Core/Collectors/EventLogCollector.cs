@@ -13,15 +13,18 @@ public sealed class EventLogCollector : IAsyncDisposable
     private readonly ILogger<EventLogCollector> _logger;
     private readonly List<EventLogWatcher> _watchers = [];
     private readonly CancellationTokenSource _cts = new();
+    private readonly DateTimeOffset _serviceStartUtc;
 
     public EventLogCollector(
         AppConfiguration configuration,
         SyslogSender sender,
-        ILogger<EventLogCollector> logger)
+        ILogger<EventLogCollector> logger,
+        DateTimeOffset serviceStartUtc)
     {
         _configuration = configuration;
         _sender = sender;
         _logger = logger;
+        _serviceStartUtc = serviceStartUtc;
     }
 
     public void Start()
@@ -77,6 +80,12 @@ public sealed class EventLogCollector : IAsyncDisposable
                 return;
         }
 
+        var created = record.TimeCreated ?? DateTimeOffset.UtcNow;
+        var grace = TimeSpan.FromMinutes(
+            Math.Max(0, _configuration.FileHandling.StartupGraceMinutes));
+        if (created < _serviceStartUtc - grace)
+            return;
+
         var text = record.FormatDescription() ?? $"EventId={record.Id} Provider={record.ProviderName}";
         var severity = MapSeverity(record.Level);
         var message = new SyslogMessage(
@@ -85,7 +94,7 @@ public sealed class EventLogCollector : IAsyncDisposable
             _configuration.Destination.Hostname,
             SyslogAppNames.WindowsEvents,
             $"[{source.LogName}] {text}",
-            record.TimeCreated ?? DateTimeOffset.UtcNow);
+            created);
 
         _sender.Enqueue(message);
     }

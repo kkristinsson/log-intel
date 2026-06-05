@@ -9,6 +9,7 @@ public sealed class DirectoryWatchRow
     public string Mode { get; set; } = "All files";
     public string PatternsDisplay { get; set; } = "*.log, *.txt";
     public bool IncludeSubdirectories { get; set; }
+    public bool OnlyPushNewEvents { get; set; }
 
     public static DirectoryWatchRow FromConfig(DirectoryWatchConfig config) => new()
     {
@@ -16,7 +17,8 @@ public sealed class DirectoryWatchRow
         Path = config.Path,
         Mode = config.Mode == DirectoryWatchMode.AllFiles ? "All files" : "Matched files only",
         PatternsDisplay = string.Join(", ", config.FilePatterns),
-        IncludeSubdirectories = config.IncludeSubdirectories
+        IncludeSubdirectories = config.IncludeSubdirectories,
+        OnlyPushNewEvents = config.OnlyPushNewEvents
     };
 
     public DirectoryWatchConfig ToConfig() => new()
@@ -30,6 +32,7 @@ public sealed class DirectoryWatchRow
             .Where(s => !string.IsNullOrWhiteSpace(s))
             .ToList(),
         IncludeSubdirectories = IncludeSubdirectories,
+        OnlyPushNewEvents = OnlyPushNewEvents,
         TailFromEndBytes = 64 * 1024
     };
 }

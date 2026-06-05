@@ -68,6 +68,7 @@ public static class ConfigBinder
             Mode = w.Mode,
             FilePatterns = w.FilePatterns.ToList(),
             IncludeSubdirectories = w.IncludeSubdirectories,
+            OnlyPushNewEvents = w.OnlyPushNewEvents,
             TailFromEndBytes = w.TailFromEndBytes
         }));
 }

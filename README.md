@@ -11,6 +11,7 @@ Syslog Pusher is a Windows service that forwards **Windows event logs** and **lo
   - Optional subdirectory recursion
 - Syslog destination: host, port, UDP/TCP, hostname, app name (RFC 5424)
 - **Ignore binary files** by default (configurable sample size)
+- **Only new** (per directory watch) — skip existing file content on service start; forward only lines appended after startup
 - First-run **install wizard** and later **configuration UI**
 - Settings stored under `%ProgramData%\SyslogPusher\`
 
@@ -52,6 +53,22 @@ sc delete SyslogPusher
 ```
 
 Remove `%ProgramData%\SyslogPusher` if you no longer need the configuration.
+
+## Only push new events (per directory)
+
+On the **Log directories** tab, each watch has an **Only new** checkbox (default off).
+
+When enabled for a directory:
+
+- On service **start**, syslogpusher seeks to the **end** of each matching file in that watch (no replay of the last 64 KB).
+- Only **new lines appended after startup** are forwarded.
+- Other directory watches without the checkbox behave as before.
+
+Use this for folders with large historical application logs (e.g. `Pri.log`) where the central collector should not receive a burst of old events after every service restart.
+
+**Pair with syslogb:** on the syslog collector, syslogb includes a built-in **SMS Pri logs** timestamp parser for `Pri.log` so sort order and time-range filtering use the embedded event date in the message, not the rsyslog receive prefix. See the [syslogb README](../syslogb/README.md#timestamp-parsers-remote--syslogpusher-logs).
+
+Windows **event logs** use a separate startup grace window (default 5 minutes) to ignore events older than service start minus grace.
 
 ## Project layout
 

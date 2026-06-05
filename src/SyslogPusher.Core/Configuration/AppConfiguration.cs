@@ -40,6 +40,7 @@ public sealed class DirectoryWatchConfig
     public List<string> FilePatterns { get; set; } = ["*.log", "*.txt"];
     public bool IncludeSubdirectories { get; set; }
     public long TailFromEndBytes { get; set; } = 64 * 1024;
+    public bool OnlyPushNewEvents { get; set; }
 }
 
 public enum DirectoryWatchMode
@@ -52,4 +53,5 @@ public sealed class FileHandlingOptions
 {
     public bool IgnoreBinaryFiles { get; set; } = true;
     public int BinaryDetectionSampleBytes { get; set; } = 8192;
+    public int StartupGraceMinutes { get; set; } = 5;
 }

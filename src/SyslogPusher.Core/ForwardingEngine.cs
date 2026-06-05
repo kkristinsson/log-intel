@@ -12,6 +12,7 @@ public sealed class ForwardingEngine : IAsyncDisposable
     private SyslogSender? _sender;
     private EventLogCollector? _eventCollector;
     private LogFileCollector? _fileCollector;
+    private readonly DateTimeOffset _serviceStartUtc = DateTimeOffset.UtcNow;
 
     public ForwardingEngine(AppConfiguration configuration, ILoggerFactory loggerFactory)
     {
@@ -29,7 +30,8 @@ public sealed class ForwardingEngine : IAsyncDisposable
             _eventCollector = new EventLogCollector(
                 _configuration,
                 _sender,
-                _loggerFactory.CreateLogger<EventLogCollector>());
+                _loggerFactory.CreateLogger<EventLogCollector>(),
+                _serviceStartUtc);
             _eventCollector.Start();
         }
 
