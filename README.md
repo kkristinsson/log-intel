@@ -66,7 +66,7 @@ When enabled for a directory:
 
 Use this for folders with large historical application logs (e.g. `Pri.log`) where the central collector should not receive a burst of old events after every service restart.
 
-**Pair with syslogb:** on the syslog collector, syslogb includes a built-in **SMS Pri logs** timestamp parser for `Pri.log` so sort order and time-range filtering use the embedded event date in the message, not the rsyslog receive prefix. See the [syslogb README](../syslogb/README.md#timestamp-parsers-remote--syslogpusher-logs).
+**Pair with syslogb:** on the syslog collector, syslogb includes a built-in **SMS Pri logs** timestamp parser for `Pri.log` so sort order and time-range filtering use the embedded event date in the message, not the rsyslog receive prefix. See the [syslogb README](https://github.com/kkristinsson/syslogb#timestamp-parsers-remote--syslogpusher-logs).
 
 Windows **event logs** use a separate startup grace window (default 5 minutes) to ignore events older than service start minus grace.
 
