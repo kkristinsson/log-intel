@@ -37,7 +37,7 @@ def _normalize_hub(ev_dict: dict[str, Any]) -> dict[str, Any]:
 
 def _normalize_syslogb(ev: dict[str, Any]) -> dict[str, Any]:
     return {
-        "origin": "syslogb",
+        "origin": "files",
         "received_at": ev.get("received_at") or ev.get("ts"),
         "line": ev.get("line"),
         "message": ev.get("line"),
@@ -79,7 +79,7 @@ def unified_search(
     since = time.time() - hours * 3600
     results: list[dict[str, Any]] = []
     counts: dict[str, int] = {}
-    errors: dict[str, str | None] = {"hub": None, "syslogb": None, "loggy": None}
+    errors: dict[str, str | None] = {"hub": None, "files": None, "loggy": None}
     num_sources = sum([include_hub, include_syslogb, include_loggy]) or 1
     per_source = max(limit // num_sources, 1)
 
@@ -104,13 +104,13 @@ def unified_search(
                 importance_min=importance_min,
             )
             if err:
-                errors["syslogb"] = err
+                errors["files"] = err
             else:
                 for ev in events:
                     results.append(_normalize_syslogb(ev))
-                counts["syslogb"] = len(events)
+                counts["files"] = len(events)
         except Exception as e:
-            errors["syslogb"] = str(e)
+            errors["files"] = str(e)
 
     if include_loggy:
         try:

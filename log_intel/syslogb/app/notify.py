@@ -118,7 +118,7 @@ def send_email(to: str, subject: str, body: str) -> tuple[bool, str]:
         return False, "email_to empty"
     msg = EmailMessage()
     msg["Subject"] = subject
-    msg["From"] = config.SMTP_FROM or config.SMTP_USER or "syslogb@localhost"
+    msg["From"] = config.SMTP_FROM or config.SMTP_USER or "log-intel@localhost"
     msg["To"] = ", ".join(recipients)
     msg.set_content(body)
     try:

@@ -314,6 +314,14 @@ class EventStore(LogStoreMixin):
                 )
             return int(cur.fetchone()[0])
 
+    def count_events_by_source_type(self, source_type: str) -> int:
+        with self._lock:
+            cur = self._conn.execute(
+                "SELECT COUNT(*) FROM events WHERE source_type = ?",
+                (source_type,),
+            )
+            return int(cur.fetchone()[0])
+
     def unanalyzed_events(self, limit: int = 10) -> list[LogEvent]:
         with self._lock:
             cur = self._conn.execute(

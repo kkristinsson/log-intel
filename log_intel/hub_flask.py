@@ -45,7 +45,14 @@ hub_bp = Blueprint(
 
 
 def _render_dashboard(active_tab: str = "overview"):
-    return render_template("dashboard.html", active_tab=active_tab)
+    from log_intel.feature_visibility import compute_ui_features
+    from log_intel.main import get_hub
+
+    return render_template(
+        "dashboard.html",
+        active_tab=active_tab,
+        ui_features=compute_ui_features(get_hub()),
+    )
 
 
 @hub_bp.route("/hub")
@@ -69,6 +76,11 @@ def hub_firewall_page():
     return _render_dashboard("firewall")
 
 
+@hub_bp.route("/hub/mist")
+def hub_mist_page():
+    return _render_dashboard("mist")
+
+
 @hub_bp.route("/health")
 def hub_health_alias():
     return hub_health()
@@ -80,12 +92,15 @@ def hub_health():
     from log_intel.analysis import ollama_client
 
     ok, msg = ollama_client.health_check()
+    from log_intel.feature_visibility import ui_features_payload
+
     return jsonify(
         {
             "status": "ok",
             "version": __version__,
             "ollama": {"ok": ok, "message": msg},
             "adapters": hub.health_snapshot(),
+            **ui_features_payload(hub),
         }
     )
 
@@ -186,7 +201,7 @@ def hub_stream():
         except json.JSONDecodeError:
             return None
         if isinstance(data, dict):
-            data.setdefault("origin", "syslogb")
+            data.setdefault("origin", "files")
             if "message" not in data and "line" in data:
                 data["message"] = data["line"]
             if "importance" not in data:
@@ -251,6 +266,21 @@ def hub_firewall():
     if action:
         events = [e for e in events if (e.action or "").lower() == action.lower()]
     return jsonify({"events": [e.to_dict() for e in events[:200]]})
+
+
+@hub_bp.route("/api/v1/mist")
+def hub_mist():
+    hub = _require_hub()
+    hours = float(request.args.get("hours", 168))
+    since = time.time() - hours * 3600
+    events = hub.store.list_events(since=since, source_type="mist", limit=500)
+    return jsonify(
+        {
+            "events": [e.to_dict() for e in events[:200]],
+            "count": len(events),
+            "poller": hub.mist_health(),
+        }
+    )
 
 
 @hub_bp.route("/api/v1/flows-map")
@@ -499,15 +529,27 @@ def register_hub_routes(app) -> None:
 
     @app.context_processor
     def hub_nav():
+        from log_intel.feature_visibility import compute_ui_features
+        from log_intel.main import get_hub
+
+        ui = compute_ui_features(get_hub())
+        all_links = [
+            {"href": "/", "label": "Files", "feature": None},
+            {"href": "/hub", "label": "Network hub", "feature": "hub"},
+            {"href": "/hub/live", "label": "Live syslog", "feature": "hub"},
+            {"href": "/hub?tab=search&all=1", "label": "Search all", "feature": "hub"},
+            {"href": "/hub/geo", "label": "Geo map", "feature": "hub_geo"},
+            {"href": "/hub/firewall", "label": "Firewall", "feature": "hub_firewall"},
+            {"href": "/hub/mist", "label": "Juniper Mist", "feature": "hub_mist"},
+            {"href": "/hub/analysis", "label": "Analysis", "feature": "hub_analysis"},
+        ]
+        hub_links = [
+            {"href": link["href"], "label": link["label"]}
+            for link in all_links
+            if link["feature"] is None or ui.get(link["feature"])
+        ]
         return {
             "hub_nav": True,
-            "hub_links": [
-                {"href": "/", "label": "Files"},
-                {"href": "/hub", "label": "Network hub"},
-                {"href": "/hub/live", "label": "Live syslog"},
-                {"href": "/hub?tab=search&all=1", "label": "Search all"},
-                {"href": "/hub/geo", "label": "Geo map"},
-                {"href": "/hub/firewall", "label": "Firewall"},
-                {"href": "/hub/analysis", "label": "Analysis"},
-            ],
+            "hub_links": hub_links,
+            "ui_features": ui,
         }

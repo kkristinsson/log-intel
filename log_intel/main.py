@@ -183,7 +183,7 @@ def run() -> None:
     settings = get_settings()
     app = create_application()
     log.info(
-        "log-intel on http://%s:%s (syslogb UI + hub at /hub)",
+        "log-intel on http://%s:%s (file logs + hub at /hub)",
         settings.http_host,
         settings.http_port,
     )

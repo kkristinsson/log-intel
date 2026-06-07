@@ -11,17 +11,18 @@
   <header>
     <div class="hub-topbar">
       <h1><a href="/" class="hub-brand-link">← File logs</a></h1>
-      <a href="/" class="btn hub-file-link">SyslogB files</a>
+      <a href="/" class="btn hub-file-link">File logs</a>
     </div>
     <p class="tagline">Live syslog, search, firewall, geo map, alerts</p>
     <nav id="tabs">
-      <button data-tab="overview" class="{{ 'active' if active_tab == 'overview' else '' }}">Overview</button>
-      <button data-tab="live" class="{{ 'active' if active_tab == 'live' else '' }}">Live</button>
-      <button data-tab="search" class="{{ 'active' if active_tab == 'search' else '' }}">Search</button>
-      <button data-tab="firewall" class="{{ 'active' if active_tab == 'firewall' else '' }}">Firewall</button>
-      <button data-tab="geo" class="{{ 'active' if active_tab == 'geo' else '' }}">Geo map</button>
-      <button data-tab="alerts" class="{{ 'active' if active_tab == 'alerts' else '' }}">Alerts</button>
-      <button data-tab="analysis" class="{{ 'active' if active_tab == 'analysis' else '' }}">Analysis</button>
+      <button type="button" data-tab="overview" class="{{ 'active' if active_tab == 'overview' else '' }}">Overview</button>
+      <button type="button" data-tab="live" class="{{ 'active' if active_tab == 'live' else '' }}">Live</button>
+      <button type="button" data-tab="search" class="{{ 'active' if active_tab == 'search' else '' }}">Search</button>
+      <button type="button" data-tab="firewall" data-ui-feature="hub_firewall" class="{{ 'active' if active_tab == 'firewall' else '' }}{% if not ui_features.get('hub_firewall') %} hidden{% endif %}">Firewall</button>
+      <button type="button" data-tab="mist" data-ui-feature="hub_mist" class="{{ 'active' if active_tab == 'mist' else '' }}{% if not ui_features.get('hub_mist') %} hidden{% endif %}">Juniper Mist</button>
+      <button type="button" data-tab="geo" data-ui-feature="hub_geo" class="{{ 'active' if active_tab == 'geo' else '' }}{% if not ui_features.get('hub_geo') %} hidden{% endif %}">Geo map</button>
+      <button type="button" data-tab="alerts" class="{{ 'active' if active_tab == 'alerts' else '' }}">Alerts</button>
+      <button type="button" data-tab="analysis" data-ui-feature="hub_analysis" class="{{ 'active' if active_tab == 'analysis' else '' }}{% if not ui_features.get('hub_analysis') %} hidden{% endif %}">Analysis</button>
     </nav>
   </header>
 
@@ -58,14 +59,14 @@
         </label>
         <label>Hours <input type="number" id="search-hours" value="168" min="1" max="720" style="width:4em"></label>
         <label><input type="checkbox" id="include-syslogb" checked> file + journal</label>
-        <label><input type="checkbox" id="include-loggy"> loggy archive</label>
+        <label data-ui-feature="hub_loggy_search"{% if not ui_features.get('hub_loggy_search') %} class="hidden"{% endif %}><input type="checkbox" id="include-loggy"> loggy archive</label>
         <button type="submit">Search</button>
       </form>
       <div id="search-meta" class="hint"></div>
       <div id="search-results" class="log-list"></div>
     </section>
 
-    <section id="panel-firewall" class="panel {{ 'active' if active_tab == 'firewall' else '' }}">
+    <section id="panel-firewall" data-ui-feature="hub_firewall" class="panel {{ 'active' if active_tab == 'firewall' else '' }}">
       <div class="toolbar">
         <label>Hours <input type="number" id="fw-hours" value="24" min="1" max="168"></label>
         <label>Log type
@@ -80,7 +81,16 @@
       <div id="firewall-table" class="log-list"></div>
     </section>
 
-    <section id="panel-geo" class="panel {{ 'active' if active_tab == 'geo' else '' }}">
+    <section id="panel-mist" data-ui-feature="hub_mist" class="panel {{ 'active' if active_tab == 'mist' else '' }}">
+      <div class="toolbar">
+        <label>Hours <input type="number" id="mist-hours" value="168" min="1" max="720"></label>
+        <button type="button" id="mist-refresh">Refresh</button>
+      </div>
+      <p id="mist-status" class="hint"></p>
+      <div id="mist-table" class="log-list"></div>
+    </section>
+
+    <section id="panel-geo" data-ui-feature="hub_geo" class="panel {{ 'active' if active_tab == 'geo' else '' }}">
       <div class="toolbar">
         <label>Hours
           <select id="geo-hours">
@@ -115,13 +125,13 @@
       <div id="alert-events" class="log-list"></div>
     </section>
 
-    <section id="panel-analysis" class="panel {{ 'active' if active_tab == 'analysis' else '' }}">
+    <section id="panel-analysis" data-ui-feature="hub_analysis" class="panel {{ 'active' if active_tab == 'analysis' else '' }}">
       <div class="analysis-subtabs">
-        <button type="button" data-analysis="hourly" class="active">Hourly</button>
-        <button type="button" data-analysis="trends">Trends</button>
-        <button type="button" data-analysis="ondemand">On-demand</button>
+        <button type="button" data-analysis="hourly" data-ui-feature="hub_analysis_hourly" class="active">Hourly</button>
+        <button type="button" data-analysis="trends" data-ui-feature="hub_analysis_trends">Trends</button>
+        <button type="button" data-analysis="ondemand" data-ui-feature="hub_analysis_ondemand">On-demand</button>
       </div>
-      <div id="analysis-hourly" class="analysis-pane active">
+      <div id="analysis-hourly" data-ui-feature="hub_analysis_hourly" class="analysis-pane active">
         <div class="toolbar">
           <label>Hours <input type="number" id="analysis-hours" value="168" min="1" max="720"></label>
           <button type="button" id="analysis-refresh">Refresh</button>
@@ -131,7 +141,7 @@
         <pre id="analysis-status"></pre>
         <div id="analysis-cards" class="log-list"></div>
       </div>
-      <div id="analysis-trends" class="analysis-pane">
+      <div id="analysis-trends" data-ui-feature="hub_analysis_trends" class="analysis-pane">
         <div class="toolbar">
           <label>Days <input type="number" id="trends-days" value="14" min="7" max="90"></label>
           <button type="button" id="trends-refresh">Refresh</button>
@@ -139,7 +149,7 @@
         <pre id="trends-meta"></pre>
         <div id="trends-bars" class="log-list"></div>
       </div>
-      <div id="analysis-ondemand" class="analysis-pane">
+      <div id="analysis-ondemand" data-ui-feature="hub_analysis_ondemand" class="analysis-pane">
         <p>Legacy: analyze specific hub event IDs (from Search/Firewall).</p>
         <form id="analyze-form" class="toolbar">
           <input type="text" id="analyze-ids" placeholder="e.g. 12,13,14" size="30">
@@ -153,6 +163,7 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="{{ url_for('static', filename='api.js') }}"></script>
   <script>window.__HUB_ACTIVE_TAB__ = "{{ active_tab }}";</script>
+  <script>window.__HUB_UI_FEATURES__ = {{ ui_features | tojson }};</script>
   <script src="{{ url_for('hub.static', filename='app.js') }}"></script>
 </body>
 </html>

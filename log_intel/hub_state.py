@@ -56,7 +56,7 @@ class HubState:
         return {
             "events_stored": self.store.count_events(),
             "sources": sources_health(),
-            "syslogb": {"ok": True, "integrated": True, "message": "vendored in log-intel"},
+            "syslogb": {"ok": True, "integrated": True, "message": "file logs integrated"},
             "loggy": self.loggy.health(),
             "netsyslog": self.netsyslog.health(),
             "mist": self.mist_health(),

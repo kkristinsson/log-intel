@@ -44,7 +44,7 @@ def shutdown_syslogb(*_args: object) -> None:
     if _shutdown_done or _runtime is None:
         return
     _shutdown_done = True
-    log.info("Shutting down syslogb core…")
+    log.info("Shutting down log-intel file-log core…")
     _runtime.analysis_scheduler.stop()
     _runtime.worker.stop()
     _runtime.tail_service.stop()
@@ -116,7 +116,7 @@ def init_syslogb() -> Flask:
     from log_intel.syslogb.app.llm_client import chat_model_name, embed_model_name
 
     log.info(
-        "log-intel syslogb core v%s ready: provider=%s LOG_DIRS=%s chat=%s embed=%s",
+        "log-intel file-log core v%s ready: provider=%s LOG_DIRS=%s chat=%s embed=%s",
         config.APP_VERSION,
         config.LLM_PROVIDER,
         config.LOG_DIRS,

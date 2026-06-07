@@ -36,8 +36,10 @@ function renderLine(container, item, cls = "") {
 async function loadHealth() {
   const r = await fetch("/health");
   const data = await r.json();
+  if (data.ui) applyUiFeatures(data.ui);
   const cards = $("#health-cards");
   cards.innerHTML = "";
+  const ui = data.ui || window.__HUB_UI_FEATURES__ || {};
   const add = (title, value, ok) => {
     const c = document.createElement("div");
     c.className = `card ${ok ? "ok" : "bad"}`;
@@ -45,13 +47,42 @@ async function loadHealth() {
     cards.appendChild(c);
   };
   add("Events stored", data.adapters?.events_stored ?? "—", true);
-  add("Ollama", data.ollama?.ok ? "OK" : "Down", data.ollama?.ok);
-  add("syslogb", data.adapters?.syslogb?.integrated ? "Integrated" : (data.adapters?.syslogb?.ok ? "OK" : "N/A"), true);
-  add("loggy archive", data.adapters?.loggy?.ok ? "OK" : "N/A", data.adapters?.loggy?.ok);
-  add("netsyslog archive", data.adapters?.netsyslog?.ok ? "OK" : "N/A", data.adapters?.netsyslog?.ok);
+  if (ui.hub_health_ollama !== false) {
+    add("Ollama", data.ollama?.ok ? "OK" : "Down", data.ollama?.ok);
+  }
+  add("File logs", data.adapters?.syslogb?.integrated ? "Integrated" : (data.adapters?.syslogb?.ok ? "OK" : "N/A"), true);
+  if (ui.hub_health_loggy) {
+    add("loggy archive", data.adapters?.loggy?.ok ? "OK" : "N/A", data.adapters?.loggy?.ok);
+  }
+  if (ui.hub_health_netsyslog) {
+    add("netsyslog archive", data.adapters?.netsyslog?.ok ? "OK" : "N/A", data.adapters?.netsyslog?.ok);
+  }
+  if (ui.hub_health_mist) {
+    const mist = data.adapters?.mist || {};
+    const mistOk = mist.ok || mist.configured;
+    add("Juniper Mist", mistOk ? "OK" : "Off", !!mistOk);
+  }
   const journalOk = data.adapters?.ingest?.journal_ok ?? data.journal_ok;
-  if (journalOk !== undefined) {
+  if (ui.hub_health_journal && journalOk !== undefined) {
     add("systemd journal", journalOk ? "OK" : "Off", !!journalOk);
+  }
+}
+
+function applyUiFeatures(ui) {
+  if (!ui) return;
+  window.__HUB_UI_FEATURES__ = ui;
+  document.querySelectorAll("[data-ui-feature]").forEach((el) => {
+    const key = el.dataset.uiFeature;
+    el.classList.toggle("hidden", !ui[key]);
+  });
+  const activeTabBtn = document.querySelector("#tabs button.active");
+  if (activeTabBtn?.classList.contains("hidden")) {
+    document.querySelector('#tabs button[data-tab="overview"]')?.click();
+  }
+  const activeAnalysisBtn = document.querySelector(".analysis-subtabs button.active");
+  if (activeAnalysisBtn?.classList.contains("hidden")) {
+    const first = document.querySelector(".analysis-subtabs button:not(.hidden)");
+    if (first) showAnalysisPane(first.dataset.analysis);
   }
 }
 
@@ -114,6 +145,32 @@ async function loadFirewall() {
   const r = await fetch(`/api/v1/firewall?hours=${hours}&log_type=${logType}&limit=100`);
   const data = await r.json();
   const box = $("#firewall-table");
+  box.innerHTML = "";
+  for (const ev of data.events || []) {
+    renderLine(box, ev);
+  }
+}
+
+async function loadMist() {
+  const hours = $("#mist-hours").value;
+  const r = await fetch(`/api/v1/mist?hours=${hours}`);
+  const data = await r.json();
+  const status = $("#mist-status");
+  if (status) {
+    const poller = data.poller || {};
+    const parts = [`${data.count ?? (data.events || []).length} event(s) in window`];
+    if (poller.last_poll_at) {
+      parts.push(`last poll ${fmtTs(poller.last_poll_at)}`);
+    }
+    if (poller.last_inserted != null) {
+      parts.push(`+${poller.last_inserted} on last poll`);
+    }
+    if (poller.last_error) {
+      parts.push(`error: ${poller.last_error}`);
+    }
+    status.textContent = parts.join(" · ");
+  }
+  const box = $("#mist-table");
   box.innerHTML = "";
   for (const ev of data.events || []) {
     renderLine(box, ev);
@@ -260,6 +317,12 @@ async function cancelWindowAnalysis() {
 }
 
 function showAnalysisPane(name) {
+  const ui = window.__HUB_UI_FEATURES__ || {};
+  const featureKey = `hub_analysis_${name}`;
+  if (ui[featureKey] === false) {
+    const first = document.querySelector(".analysis-subtabs button:not(.hidden)");
+    if (first) name = first.dataset.analysis;
+  }
   $$(".analysis-pane").forEach((p) => p.classList.remove("active"));
   $$(".analysis-subtabs button").forEach((b) => b.classList.remove("active"));
   $(`#analysis-${name}`)?.classList.add("active");
@@ -302,6 +365,7 @@ $$("#tabs button").forEach((btn) => {
     if (btn.dataset.tab === "live") startLive();
     if (btn.dataset.tab === "geo") { initMap(); loadGeo(); }
     if (btn.dataset.tab === "firewall") loadFirewall();
+    if (btn.dataset.tab === "mist") loadMist();
     if (btn.dataset.tab === "alerts") loadAlerts();
     if (btn.dataset.tab === "analysis") showAnalysisPane("hourly");
   });
@@ -316,6 +380,7 @@ const syslogbLiveCb = $("#include-syslogb-live");
 if (syslogbLiveCb) syslogbLiveCb.addEventListener("change", startLive);
 $("#search-form").addEventListener("submit", doSearch);
 $("#fw-refresh").addEventListener("click", loadFirewall);
+$("#mist-refresh")?.addEventListener("click", loadMist);
 $("#geo-refresh").addEventListener("click", loadGeo);
 $("#analyze-form")?.addEventListener("submit", runAnalyze);
 $("#alert-rule-form")?.addEventListener("submit", saveAlertRule);
@@ -329,8 +394,10 @@ loadHealth();
 loadOverviewEvents();
 setInterval(loadHealth, 60000);
 
+applyUiFeatures(window.__HUB_UI_FEATURES__);
+
 const bootTab = window.__HUB_ACTIVE_TAB__;
 if (bootTab && bootTab !== "overview") {
   const btn = document.querySelector(`#tabs button[data-tab="${bootTab}"]`);
-  if (btn) btn.click();
+  if (btn && !btn.classList.contains("hidden")) btn.click();
 }

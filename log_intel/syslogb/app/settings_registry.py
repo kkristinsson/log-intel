@@ -166,7 +166,7 @@ def registry() -> list[SettingDef]:
             "",
             "secret",
             "alerts",
-            "Shared secret for POST /api/v1/webhooks/syslogb",
+            "Shared secret for POST /api/v1/webhooks/syslogb (legacy path; file-log alert ingest)",
             "Send as X-Webhook-Secret or Authorization: Bearer …",
         ),
         # --- Hub (network syslog + on-demand LLM) ---
@@ -247,7 +247,7 @@ def registry() -> list[SettingDef]:
             "bool",
             "mist",
             "Poll Juniper Mist cloud for events",
-            "Requires MIST_API_KEY — events appear in hub search and live stream",
+            "Requires MIST_API_KEY — view events on Network hub → Juniper Mist",
         ),
         SettingDef("MIST_API_KEY", "", "secret", "mist", "Juniper Mist API token"),
         SettingDef(

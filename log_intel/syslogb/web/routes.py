@@ -208,6 +208,14 @@ def create_app(
             logo_url = url_for("static", filename=logo.lstrip("/"))
         else:
             logo_url = ""
+        ui_features: dict = {}
+        try:
+            from log_intel.feature_visibility import compute_ui_features
+            from log_intel.main import get_hub
+
+            ui_features = compute_ui_features(get_hub())
+        except Exception:
+            pass
         return {
             "app_name": config.APP_NAME,
             "app_version": config.APP_VERSION,
@@ -218,6 +226,7 @@ def create_app(
             "auth_enabled": auth_required(),
             "setup_complete": is_setup_complete(store),
             "llm_enabled": llm_enabled(),
+            "ui_features": ui_features,
         }
 
     @app.route("/login", methods=["GET", "POST"])
@@ -347,6 +356,14 @@ def create_app(
         ok, msg = health_check()
         dir_ok, dir_msg = check_log_dirs_access(log_dirs())
         journal = tail_service.journal_status
+        ui_features: dict = {}
+        try:
+            from log_intel.feature_visibility import compute_ui_features
+            from log_intel.main import get_hub
+
+            ui_features = compute_ui_features(get_hub())
+        except Exception:
+            pass
         return jsonify({
             "version": config.APP_VERSION,
             "auth_enabled": auth_required(),
@@ -361,6 +378,7 @@ def create_app(
             "log_dir_msg": dir_msg,
             "journal_ok": journal.get("ok", False),
             "journal_msg": journal.get("message", ""),
+            "ui": ui_features,
         })
 
     @app.get("/api/files")
@@ -990,7 +1008,7 @@ def create_app(
             gen = stream_jsonl(events)
             mime = "application/x-ndjson"
         return Response(gen, mimetype=mime, headers={
-            "Content-Disposition": f'attachment; filename="syslogb-export.{fmt}"'
+            "Content-Disposition": f'attachment; filename="log-intel-export.{fmt}"'
         })
 
     @app.get("/api/jobs")

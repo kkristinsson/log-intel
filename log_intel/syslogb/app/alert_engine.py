@@ -130,7 +130,7 @@ class AlertEngine:
             self._store.record_alert_event(rule["id"], source, line, ts, "webhook", "sent")
             try:
                 from log_intel.metrics import ALERTS_FIRED
-                ALERTS_FIRED.labels(origin="syslogb").inc()
+                ALERTS_FIRED.labels(origin="files").inc()
             except ImportError:
                 pass
         else:
@@ -157,7 +157,7 @@ class AlertEngine:
             return
         msg = EmailMessage()
         msg["Subject"] = f"[{config.APP_NAME}] Alert: {rule['name']}"
-        msg["From"] = config.SMTP_FROM or config.SMTP_USER or "syslogb@localhost"
+        msg["From"] = config.SMTP_FROM or config.SMTP_USER or "log-intel@localhost"
         msg["To"] = ", ".join(recipients)
         body = f"Rule: {rule['name']}\nSource: {source}\nTime: {ts}\n\n{line}\n"
         msg.set_content(body)
@@ -171,7 +171,7 @@ class AlertEngine:
             self._store.record_alert_event(rule["id"], source, line, ts, "email", "sent")
             try:
                 from log_intel.metrics import ALERTS_FIRED
-                ALERTS_FIRED.labels(origin="syslogb").inc()
+                ALERTS_FIRED.labels(origin="files").inc()
             except ImportError:
                 pass
         except Exception as e:
@@ -185,7 +185,7 @@ class AlertEngine:
         rule = rules.get(rule_id)
         if not rule:
             raise ValueError("rule not found")
-        self._deliver(rule, "/test/syslog", "syslogb test alert line", time.time())
+        self._deliver(rule, "/test/syslog", "log-intel test alert line", time.time())
         return {"status": "ok"}
 
     def shutdown(self) -> None:

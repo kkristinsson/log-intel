@@ -1737,17 +1737,17 @@
     const stamp = new Date().toISOString().replace(/[:.]/g, "-");
     if (fmt === "jsonl") {
       const body = events.map((ev) => JSON.stringify(ev)).join("\n") + "\n";
-      downloadBlob(body, `syslogb-selected-${stamp}.jsonl`, "application/x-ndjson");
+      downloadBlob(body, `log-intel-selected-${stamp}.jsonl`, "application/x-ndjson");
       return;
     }
     if (fmt === "csv") {
       const esc = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
       const body = ["source,line", ...events.map((ev) => `${esc(ev.source)},${esc(ev.line)}`)].join("\n") + "\n";
-      downloadBlob(body, `syslogb-selected-${stamp}.csv`, "text/csv");
+      downloadBlob(body, `log-intel-selected-${stamp}.csv`, "text/csv");
       return;
     }
     const body = events.map((ev) => ev.line).join("\n") + "\n";
-    downloadBlob(body, `syslogb-selected-${stamp}.txt`, "text/plain");
+    downloadBlob(body, `log-intel-selected-${stamp}.txt`, "text/plain");
   }
 
   async function jumpToSearchHit(ev) {

@@ -71,7 +71,7 @@ class AlertEngine:
                 continue
             if not self._matches(rule, line):
                 continue
-            self._fire(rule, source, line, float(ts or received_at), origin="syslogb", settings=settings)
+            self._fire(rule, source, line, float(ts or received_at), origin="files", settings=settings)
 
     def _fire(
         self,
@@ -265,16 +265,16 @@ class AlertEngine:
     def ingest_syslogb_webhook(self, body: dict) -> None:
         self._store.insert_alert_event(
             rule_id=body.get("rule_id"),
-            source=str(body.get("source", "syslogb")),
+            source=str(body.get("source", "files")),
             line=str(body.get("line", ""))[:2000],
             ts=float(body.get("ts") or time.time()),
             delivered=True,
             payload=body,
-            origin="syslogb",
+            origin="files",
             channel="webhook",
             status="sent",
         )
-        ALERTS_FIRED.labels(origin="syslogb").inc()
+        ALERTS_FIRED.labels(origin="files").inc()
 
     def send_test(self, rule_id: str) -> dict[str, str]:
         rules = {r["id"]: r for r in self._store.list_alert_rules()}

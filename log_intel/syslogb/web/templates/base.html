@@ -35,7 +35,9 @@
       </div>
       {% endif %}
     </div>
+    {% if ui_features.get('hub') %}
     <a class="btn btn-hub-nav" href="{{ url_for('hub.hub_overview') }}" title="Live syslog, firewall, geo map">Network hub</a>
+    {% endif %}
     {% block topbar_extra %}{% endblock %}
     <div class="topbar-right">
     {% if current_user.is_authenticated or not auth_enabled or not setup_complete %}

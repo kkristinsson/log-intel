@@ -13,8 +13,10 @@
 <div class="layout">
   <aside class="sidebar">
     <h2>Log files</h2>
+    {% if ui_features.get('hub') %}
     <a class="btn primary hub-sidebar-link" href="{{ url_for('hub.hub_overview') }}">Network hub →</a>
     <p class="hint hub-sidebar-hint">Live Palo Alto syslog, geo map, firewall</p>
+    {% endif %}
     <p id="sidebar-groups-hint" class="hint sidebar-hint hidden">Groups start collapsed — click to expand, double-click to search that folder.</p>
     <ul id="file-list" class="file-list"></ul>
     {% if llm_enabled %}
@@ -174,7 +176,7 @@
       <section>
         <h4>File view and live tail</h4>
         <ul>
-          <li><strong>Time range</strong> — limits the <em>initial</em> load by <strong>parsed event time</strong> (see Timestamps and remote logs below); if nothing matches, syslogb shows the recent tail with a hint.</li>
+          <li><strong>Time range</strong> — limits the <em>initial</em> load by <strong>parsed event time</strong> (see Timestamps and remote logs below); if nothing matches, log-intel shows the recent tail with a hint.</li>
           <li><strong>All (tail window)</strong> — best for quiet logs (e.g. <code>mail.log</code>) or when you want byte-tail without a time cut-off.</li>
           <li>While you stay scrolled to the <strong>top</strong> (newest-first) or <strong>bottom</strong> (oldest-first), new lines are appended automatically on plain files.</li>
           <li>Scroll away from the edge to read history without the view jumping.</li>
@@ -188,7 +190,7 @@
           <li><strong>Leading prefix</strong> — when the central syslog server received the message (e.g. <code>May 18 06:39:49 host …</code>)</li>
           <li><strong>Embedded in the message</strong> — the real application event time (e.g. <code>[sms.2024-11-05] - 23:32:55.288</code> in <code>Pri.log</code>)</li>
         </ul>
-        <p>By default syslogb uses the <strong>leading</strong> timestamp. For known formats, <strong>timestamp parsers</strong> (Settings → Timestamp parsers) extract the embedded date instead — used for sort order, <strong>Time range</strong> filtering, and export.</p>
+        <p>By default log-intel uses the <strong>leading</strong> timestamp. For known formats, <strong>timestamp parsers</strong> (Settings → Timestamp parsers) extract the embedded date instead — used for sort order, <strong>Time range</strong> filtering, and export.</p>
         <p>Built-in <strong>SMS Pri logs</strong> is enabled for <code>Pri.log</code>. Lines without a matching embedded date fall back to the leading timestamp. Other filenames are unaffected.</p>
         <p>On Windows hosts, enable <strong>Only new</strong> on the relevant syslogpusher directory watch to avoid replaying old file content on service restart.</p>
       </section>
