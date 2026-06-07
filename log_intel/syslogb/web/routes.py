@@ -35,18 +35,58 @@ from log_intel.syslogb.app.log_dirs import (
     resolve_log_dir_scope,
     resolve_safe_path,
 )
-from log_intel.syslogb.app.tail_service import TailService
+from log_intel.syslogb.app.security import (
+    check_csrf,
+    safe_redirect_target,
+    validate_outbound_webhook_url,
+    webhook_ingest_authorized,
+)
 
 logger = logging.getLogger(__name__)
 
 login_manager = LoginManager()
 
 
+def _unified_alert_store(fallback: AppStore):
+    try:
+        from log_intel.main import get_hub
+
+        hub = get_hub()
+        if hub is not None:
+            return hub.store
+    except Exception:
+        pass
+    return fallback
+
+
+def _unified_alert_engine(fallback):
+    try:
+        from log_intel.main import get_hub
+
+        hub = get_hub()
+        if hub is not None:
+            return hub.alert_engine
+    except Exception:
+        pass
+    return fallback
+
+
 def _init_auth(app: Flask, store: AppStore) -> None:
     secret = config.FLASK_SECRET_KEY.strip()
-    if auth_required() and not secret:
-        raise RuntimeError("AUTH_ENABLED requires FLASK_SECRET_KEY (set in web settings or .env)")
+    if config.AUTH_ENABLED:
+        if not secret:
+            raise RuntimeError("AUTH_ENABLED requires FLASK_SECRET_KEY (set in web settings or .env)")
+        has_ldap = bool(config.LDAP_URI.strip())
+        has_local = bool(config.LOCAL_AUTH_USERNAME.strip() and config.LOCAL_AUTH_PASSWORD)
+        if not has_ldap and not has_local:
+            raise RuntimeError(
+                "AUTH_ENABLED requires LDAP URI or local admin username and password"
+            )
     app.secret_key = secret or "dev-insecure-change-me"
+    app.config.update(
+        SESSION_COOKIE_HTTPONLY=True,
+        SESSION_COOKIE_SAMESITE="Lax",
+    )
 
     login_manager.init_app(app)
     login_manager.login_view = "login"
@@ -86,6 +126,26 @@ def _init_auth(app: Flask, store: AppStore) -> None:
         if not current_user.is_authenticated:
             return login_manager.unauthorized()
         return None
+
+    @app.before_request
+    def enforce_csrf():
+        if not auth_required():
+            return None
+        if check_csrf():
+            return None
+        return jsonify({"error": "csrf"}), 403
+
+
+def _validate_alert_rule_body(body: dict) -> tuple[dict | None, tuple]:
+    url = (body.get("webhook_url") or "").strip()
+    if url:
+        ok, err = validate_outbound_webhook_url(url)
+        if not ok:
+            return None, (jsonify({"error": err}), 400)
+    return body, ()
+
+
+from log_intel.syslogb.app.tail_service import TailService
 
 
 def _enrich_events(events: list, store: AppStore) -> list:
@@ -176,7 +236,7 @@ def create_app(
             if user:
                 login_user(user)
                 session["auth_method"] = user.method
-                dest = request.args.get("next") or url_for("index")
+                dest = safe_redirect_target(request.args.get("next"))
                 return redirect(dest)
             error = "Invalid username or password."
 
@@ -259,6 +319,9 @@ def create_app(
         if not path.is_file():
             return jsonify({"error": f"Not a file: {path}"}), 404
         body = {**body, "file_path": str(path.resolve())}
+        _, err = _validate_alert_rule_body(body)
+        if err:
+            return err
         try:
             sched = store.upsert_analysis_schedule(body)
         except ValueError as e:
@@ -652,12 +715,19 @@ def create_app(
             return jsonify({"error": "scope must be 'full' or 'window'"}), 400
         if scope == "window" and not window:
             window = "1h"
+        if is_journal_source(path_str):
+            if scope == "full":
+                return jsonify({"error": "Full journal analysis is not supported; use scope=window"}), 400
+            if scope != "window":
+                return jsonify({"error": "Journal sources require scope=window"}), 400
+            job_mode = f"window:{window or '1h'}"
+            job_id = store.create_job(path_str, mode=job_mode)
+            worker.enqueue(job_id, path_str, window=window or "1h")
+            return jsonify({"job_id": job_id, "status": "pending", "scope": scope, "window": window or "1h"})
         try:
             path = resolve_safe_path(path_str)
         except PermissionError as e:
             return jsonify({"error": str(e)}), 403
-        if is_journal_source(path_str):
-            return jsonify({"error": "LLM file analysis is not supported for journal sources yet"}), 400
         if not path.is_file():
             return jsonify({"error": f"Not a file: {path}"}), 404
         job_mode = f"window:{window}" if scope == "window" else "full"
@@ -734,9 +804,17 @@ def create_app(
                 if not sk and "FLASK_SECRET_KEY" not in updates:
                     updates["FLASK_SECRET_KEY"] = secrets.token_hex(32)
         store.set_many(updates)
-        from log_intel.syslogb.app.runtime_config import refresh_config_module
-        refresh_config_module(store)
+        from log_intel.settings_bridge import refresh_all_settings
+
+        refresh_all_settings(store)
         app.secret_key = config.FLASK_SECRET_KEY.strip() or "dev-insecure-change-me"
+        try:
+            from log_intel.main import reconfigure_hub_llm_workers, reconfigure_mist_poller
+
+            reconfigure_hub_llm_workers()
+            reconfigure_mist_poller()
+        except Exception:
+            logger.exception("Failed to reconfigure hub workers after settings save")
         if body.get("complete_setup"):
             store.mark_setup_complete()
         return jsonify({
@@ -749,13 +827,20 @@ def create_app(
     def api_settings_reload():
         if not can_access_settings(store):
             return jsonify({"error": "forbidden"}), 403
-        from log_intel.syslogb.app.runtime_config import refresh_config_module
+        from log_intel.settings_bridge import refresh_all_settings
         from log_intel.syslogb.app.timestamp_parsers import refresh_parsers_cache
 
-        refresh_config_module(store)
+        refresh_all_settings(store)
         refresh_parsers_cache(store.list_timestamp_parsers())
         ok, msg = tail_service.reload()
         alert_engine.reload_rules()
+        try:
+            from log_intel.main import reconfigure_hub_llm_workers, reconfigure_mist_poller
+
+            reconfigure_hub_llm_workers()
+            reconfigure_mist_poller()
+        except Exception:
+            logger.exception("Failed to reconfigure hub workers after settings reload")
         return jsonify({"ok": ok, "message": msg})
 
     @app.get("/api/columnizers")
@@ -806,32 +891,42 @@ def create_app(
 
     @app.get("/api/alert-rules")
     def api_alert_rules_list():
-        return jsonify({"rules": store.list_alert_rules()})
+        ustore = _unified_alert_store(store)
+        return jsonify({"rules": ustore.list_alert_rules()})
 
     @app.put("/api/alert-rules")
     def api_alert_rules_upsert():
         if not is_settings_admin():
             return jsonify({"error": "forbidden"}), 403
         body = request.get_json(silent=True) or {}
-        rule = store.upsert_alert_rule(body)
-        alert_engine.reload_rules()
-        return jsonify(rule)
+        _, err = _validate_alert_rule_body(body)
+        if err:
+            return err
+        ustore = _unified_alert_store(store)
+        uengine = _unified_alert_engine(alert_engine)
+        rid = ustore.upsert_alert_rule(body)
+        uengine.reload_rules()
+        rules = {r["id"]: r for r in ustore.list_alert_rules()}
+        return jsonify(rules.get(rid, {"id": rid}))
 
     @app.delete("/api/alert-rules/<rid>")
     def api_alert_rules_delete(rid: str):
         if not is_settings_admin():
             return jsonify({"error": "forbidden"}), 403
-        if not store.delete_alert_rule(rid):
+        ustore = _unified_alert_store(store)
+        uengine = _unified_alert_engine(alert_engine)
+        if not ustore.delete_alert_rule(rid):
             return jsonify({"error": "not found"}), 404
-        alert_engine.reload_rules()
+        uengine.reload_rules()
         return jsonify({"ok": True})
 
     @app.post("/api/alert-rules/<rid>/test")
     def api_alert_rules_test(rid: str):
         if not is_settings_admin():
             return jsonify({"error": "forbidden"}), 403
+        uengine = _unified_alert_engine(alert_engine)
         try:
-            return jsonify(alert_engine.send_test(rid))
+            return jsonify(uengine.send_test(rid))
         except ValueError as e:
             return jsonify({"error": str(e)}), 404
 

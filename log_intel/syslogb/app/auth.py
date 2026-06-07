@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import secrets
 import ssl
 from dataclasses import dataclass
@@ -29,11 +30,14 @@ class AuthUser(UserMixin):
 def auth_required() -> bool:
     if not config.AUTH_ENABLED:
         return False
-    if config.LDAP_URI.strip():
+    has_ldap = bool(config.LDAP_URI.strip())
+    has_local = bool(config.LOCAL_AUTH_USERNAME.strip() and config.LOCAL_AUTH_PASSWORD)
+    if has_ldap or has_local:
         return True
-    if config.LOCAL_AUTH_USERNAME.strip() and config.LOCAL_AUTH_PASSWORD:
-        return True
-    return False
+    logger.error(
+        "AUTH_ENABLED=1 but no LDAP URI or local admin password configured — locking down HTTP API"
+    )
+    return True
 
 
 def authenticate(username: str, password: str) -> AuthUser | None:
@@ -75,7 +79,16 @@ def _ldap_authenticate(username: str, password: str) -> AuthUser | None:
 
     uri = config.LDAP_URI.strip()
     use_ssl = uri.lower().startswith("ldaps://") or config.LDAP_USE_SSL
-    tls = Tls(validate=ssl.CERT_NONE) if use_ssl else None
+    if use_ssl:
+        insecure = os.environ.get("LDAP_TLS_INSECURE", "").strip().lower() in (
+            "1",
+            "true",
+            "yes",
+            "on",
+        )
+        tls = Tls(validate=ssl.CERT_NONE if insecure else ssl.CERT_REQUIRED)
+    else:
+        tls = None
     server = Server(uri, use_ssl=use_ssl, tls=tls, connect_timeout=config.LDAP_TIMEOUT_SEC)
 
     user_dn, user_ident = _resolve_ldap_user_identity(

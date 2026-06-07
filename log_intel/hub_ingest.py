@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 from log_intel.config import get_settings
 from log_intel.geo.geoip import GeoLookup, enrich_event
 from log_intel.ingest.classifier import classify_and_parse
-from log_intel.ingest.syslog_server import serve_tcp, serve_udp
+from log_intel.ingest.syslog_server import QueueItem, serve_tcp, serve_udp
 from log_intel.metrics import (
     EVENTS_STORED,
     INGEST_TOTAL,
@@ -30,20 +30,27 @@ _thread: threading.Thread | None = None
 _loop: asyncio.AbstractEventLoop | None = None
 
 
+def _record_queue_drop(hub: HubState, host: str, transport: str, queue: asyncio.Queue[QueueItem]) -> None:
+    PARSE_DROP.labels(reason="queue_full").inc()
+    hub.ingest_stats["queue_drops"] = hub.ingest_stats.get("queue_drops", 0) + 1
+    QUEUE_DEPTH.set(queue.qsize())
+    log.debug("queue drop from %s (%s)", host, transport)
+
+
 async def _process_queue(
-    queue: asyncio.Queue[tuple[bytes, str]],
+    queue: asyncio.Queue[QueueItem],
     hub: HubState,
     geo: GeoLookup,
 ) -> None:
     settings = get_settings()
     loop = asyncio.get_running_loop()
     while True:
-        data, host = await queue.get()
+        data, host, transport = await queue.get()
         QUEUE_DEPTH.set(queue.qsize())
-        INGEST_TOTAL.labels(transport="udp").inc()
+        INGEST_TOTAL.labels(transport=transport).inc()
         try:
             text = data.decode("utf-8", errors="replace")
-            ev = classify_and_parse(text, host, "udp", settings.raw_truncate)
+            ev = classify_and_parse(text, host, transport, settings.raw_truncate)
             if ev is None:
                 PARSE_DROP.labels(reason="unparseable").inc()
                 hub.ingest_stats["parse_drops"] = hub.ingest_stats.get("parse_drops", 0) + 1
@@ -68,11 +75,13 @@ async def _retention_loop(hub: HubState) -> None:
             n = hub.store.delete_older_than(time.time() - settings.retention_hours * 3600)
             if n:
                 log.info("retention removed %s events", n)
+            EVENTS_STORED.set(hub.store.count_events())
 
 
 async def _ingest_main(hub: HubState, geo: GeoLookup) -> None:
     settings = get_settings()
-    queue: asyncio.Queue[tuple[bytes, str]] = asyncio.Queue(maxsize=settings.queue_maxsize)
+    queue: asyncio.Queue[QueueItem] = asyncio.Queue(maxsize=settings.queue_maxsize)
+    on_drop = lambda host, transport: _record_queue_drop(hub, host, transport, queue)
     worker = asyncio.create_task(_process_queue(queue, hub, geo))
     ret = (
         asyncio.create_task(_retention_loop(hub))
@@ -80,8 +89,8 @@ async def _ingest_main(hub: HubState, geo: GeoLookup) -> None:
         else None
     )
     try:
-        udp = await serve_udp(queue, settings)
-        tcp_srv = await serve_tcp(queue, settings)
+        udp = await serve_udp(queue, settings, on_drop)
+        tcp_srv = await serve_tcp(queue, settings, on_drop)
     except OSError as e:
         worker.cancel()
         if ret:

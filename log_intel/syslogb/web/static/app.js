@@ -95,6 +95,7 @@
 
   let selectedPath = null;
   let selectedReadable = true;
+  let selectedJournal = false;
   let explainEntry = null;
   let logModalFocusEv = null;
   let contextMenuPath = null;
@@ -706,7 +707,8 @@
 
   function updateAnalyzeButtonsEnabled() {
     const canAnalyze = Boolean(selectedPath && selectedReadable);
-    setAnalyzeButtonsDisabled(!canAnalyze, "full");
+    const fullOk = canAnalyze && !selectedJournal;
+    setAnalyzeButtonsDisabled(!fullOk, "full");
     const viewingFile = Boolean(
       canAnalyze && filterPath && selectedPath === filterPath && !searchActive
     );
@@ -2347,6 +2349,7 @@
     filterPath = null;
     selectedPath = null;
     selectedReadable = true;
+    selectedJournal = false;
     updateAnalyzeButtonsEnabled();
     clearRowSelection();
     showSingleView();
@@ -2375,14 +2378,18 @@
   async function selectFile(path, name, readable = true, { focusEv = null } = {}) {
     if (searchActive) {
       filterPath = path;
+      let fileMeta = null;
       if (path) {
-        const fileMeta = allFilesCache.find((f) => f.path === path);
+        fileMeta = allFilesCache.find((f) => f.path === path);
         filterGroup = fileMeta?.group_path || filterGroup;
       } else {
         filterGroup = null;
       }
       selectedPath = path;
       selectedReadable = readable;
+      selectedJournal = Boolean(
+        path && (path.startsWith("journal://") || fileMeta?.journal)
+      );
       updateAnalyzeButtonsEnabled();
       syncSidebarSelection();
       updateSelectedFileScopeOption();
@@ -2403,6 +2410,9 @@
     }
     selectedPath = path;
     selectedReadable = readable;
+    selectedJournal = Boolean(
+      path && (path.startsWith("journal://") || fileMeta?.journal)
+    );
     updateAnalyzeButtonsEnabled();
     clearRowSelection();
     Object.keys(columnFilters).forEach((k) => { delete columnFilters[k]; });

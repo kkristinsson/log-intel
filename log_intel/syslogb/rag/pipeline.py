@@ -8,6 +8,8 @@ from pathlib import Path
 from log_intel.syslogb.app import config
 from log_intel.syslogb.app import llm_audit
 from log_intel.syslogb.app.file_reader import read_tail, read_tail_since, window_to_since_ts
+from log_intel.syslogb.app.journal_reader import read_journal_window
+from log_intel.syslogb.app.journal_source import is_journal_source
 from log_intel.syslogb.app.llm_filter import filter_lines_for_llm
 from log_intel.syslogb.app.llm_client import analyze_lines, llm_provider
 from log_intel.syslogb.rag.chunker import chunk_lines
@@ -270,6 +272,50 @@ def _analyze_file_inner(
     ms = (time.perf_counter() - t0) * 1000
     llm_audit.log_ok(
         op="analyze_file",
+        duration_ms=ms,
+        meta={**file_meta, "mode": mode},
+        response_note=f"severity={parsed.get('severity', '?')}",
+    )
+    return parsed, raw, mode
+
+
+def analyze_source(
+    source: str | Path,
+    on_progress: ProgressFn | None = None,
+    should_cancel: CancelFn | None = None,
+    *,
+    window: str | None = None,
+) -> tuple[dict, str, str]:
+    """Analyze a file path or journal:// URI. Journal sources require window mode."""
+    if isinstance(source, str) and is_journal_source(source):
+        if window is None:
+            raise ValueError("Journal analysis requires a time window (scope=window)")
+        return _analyze_journal_inner(source, on_progress, should_cancel, window=window)
+    return analyze_file(Path(source), on_progress=on_progress, should_cancel=should_cancel, window=window)
+
+
+def _analyze_journal_inner(
+    uri: str,
+    on_progress: ProgressFn | None,
+    should_cancel: CancelFn | None,
+    *,
+    window: str,
+) -> tuple[dict, str, str]:
+    t0 = time.perf_counter()
+    file_meta = {"source": uri, "window": window}
+    _report(on_progress, 5, "Reading journal window", should_cancel=should_cancel)
+    lines, scope_note = read_journal_window(uri, window)
+    filtered = _filter_for_llm(Path(uri), lines)
+    size = _lines_byte_size(filtered)
+    file_meta["bytes"] = size
+    file_meta["lines"] = len(filtered)
+    _report(on_progress, 10, f"Loaded {len(filtered)} lines", should_cancel=should_cancel)
+    parsed, raw, mode = _direct(
+        Path(uri), filtered, scope_note, "direct-journal-window", on_progress, should_cancel
+    )
+    ms = (time.perf_counter() - t0) * 1000
+    llm_audit.log_ok(
+        op="analyze_journal",
         duration_ms=ms,
         meta={**file_meta, "mode": mode},
         response_note=f"severity={parsed.get('severity', '?')}",

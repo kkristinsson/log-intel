@@ -286,6 +286,33 @@ class AppStore:
             finally:
                 conn.close()
 
+    def sync_registry_settings(self) -> None:
+        """Insert settings_meta and default values for any new registry keys."""
+        with self._lock:
+            conn = self._connect()
+            try:
+                self._seed_meta(conn)
+                now = time.time()
+                existing = {
+                    r[0]
+                    for r in conn.execute("SELECT key FROM settings").fetchall()
+                }
+                for d in registry():
+                    if d.key in existing or d.key == SETUP_COMPLETE_KEY:
+                        continue
+                    env_val = os.environ.get(d.key)
+                    value = env_val if env_val is not None and env_val != "" else d.default
+                    conn.execute(
+                        """
+                        INSERT INTO settings (key, value, value_type, updated_at)
+                        VALUES (?, ?, ?, ?)
+                        """,
+                        (d.key, value, d.value_type, now),
+                    )
+                conn.commit()
+            finally:
+                conn.close()
+
     def _seed_builtin_columnizers(self, conn: sqlite3.Connection, now: float) -> None:
         builtins = [
             ("builtin-syslog", "Syslog", "syslog", "{}", "syslog,messages,*.log", 10),

@@ -28,3 +28,11 @@ def test_insert_and_search() -> None:
         assert len(hits) == 1
         assert hits[0].message.startswith("error")
         store.close()
+
+
+def test_schema_v2_analyses_table() -> None:
+    with tempfile.TemporaryDirectory() as td:
+        store = EventStore(str(Path(td) / "t.sqlite"))
+        stats = store.analysis_window_stats(0, 9999999999)
+        assert stats["analyses_total"] == 0
+        store.close()

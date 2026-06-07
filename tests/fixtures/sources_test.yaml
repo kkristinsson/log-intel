@@ -1,0 +1,9 @@
+version: 1
+sources:
+  - id: test_custom
+    source_type: custom_type
+    ingest: syslog
+    enabled: true
+    match:
+      - type: message_contains
+        pattern: "CUSTOM_MARKER"

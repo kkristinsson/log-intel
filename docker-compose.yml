@@ -13,6 +13,7 @@ services:
     volumes:
       - ./data:/data
       - ./geoip:/geoip:ro
+      - ./config/sources.yaml:/app/config/sources.yaml:ro
       # File-tail sources (syslogb core)
       - ${LOG_DIRS_HOST:-/var/log}:/var/log:ro
       - /var/log/remote:/var/log/remote:ro
@@ -31,6 +32,8 @@ services:
       LOGGY_DB_PATH: /loggy/loggy.db
       NETSYSLOG_DB_PATH: /netsyslog/events.sqlite
       JOURNAL_ENABLED: "1"
+      LOG_INTEL_SOURCES_YAML: /app/config/sources.yaml
+      # Hub LLM / meta summary toggles: configure in Settings → Hub & network syslog
       # Leave JOURNAL_DIRECTORY unset so journalctl uses mounted /var/log/journal + /run/log/journal
     extra_hosts:
       - "host.docker.internal:host-gateway"

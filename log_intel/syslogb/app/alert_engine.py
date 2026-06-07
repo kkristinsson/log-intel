@@ -128,6 +128,11 @@ class AlertEngine:
         ok, msg = send_webhook(url, payload)
         if ok:
             self._store.record_alert_event(rule["id"], source, line, ts, "webhook", "sent")
+            try:
+                from log_intel.metrics import ALERTS_FIRED
+                ALERTS_FIRED.labels(origin="syslogb").inc()
+            except ImportError:
+                pass
         else:
             logger.warning("Webhook alert failed: %s", msg)
             self._store.record_alert_event(
@@ -164,6 +169,11 @@ class AlertEngine:
                     smtp.login(config.SMTP_USER, config.SMTP_PASSWORD)
                 smtp.send_message(msg)
             self._store.record_alert_event(rule["id"], source, line, ts, "email", "sent")
+            try:
+                from log_intel.metrics import ALERTS_FIRED
+                ALERTS_FIRED.labels(origin="syslogb").inc()
+            except ImportError:
+                pass
         except Exception as e:
             logger.warning("Email alert failed: %s", e)
             self._store.record_alert_event(

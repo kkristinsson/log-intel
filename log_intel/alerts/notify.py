@@ -8,6 +8,8 @@ from typing import Any
 
 import httpx
 
+from log_intel.syslogb.app.security import validate_outbound_webhook_url
+
 log = logging.getLogger(__name__)
 
 
@@ -16,6 +18,10 @@ def is_discord_webhook(url: str) -> bool:
 
 
 def deliver_webhook(url: str, payload: dict[str, Any]) -> bool:
+    ok, err = validate_outbound_webhook_url(url)
+    if not ok:
+        log.warning("webhook blocked: %s", err)
+        return False
     try:
         if is_discord_webhook(url):
             content = (

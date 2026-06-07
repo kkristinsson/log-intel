@@ -14,10 +14,17 @@ logger = logging.getLogger(__name__)
 _CHROMA_ADD_BATCH = 200
 
 
-def _file_hash(path: Path) -> str:
-    st = path.stat()
+def _source_key(path: Path | str) -> str:
+    p = str(path)
+    if p.startswith("journal://"):
+        return hashlib.sha256(p.encode()).hexdigest()[:16]
+    st = Path(path).stat()
     key = f"{path}:{st.st_mtime_ns}:{st.st_size}"
     return hashlib.sha256(key.encode()).hexdigest()[:16]
+
+
+def _file_hash(path: Path | str) -> str:
+    return _source_key(path)
 
 
 class ChromaStore:
@@ -26,8 +33,8 @@ class ChromaStore:
         self._dir.mkdir(parents=True, exist_ok=True)
         self._client = chromadb.PersistentClient(path=str(self._dir))
 
-    def _collection_name(self, path: Path) -> str:
-        return f"job_{_file_hash(path)}"
+    def _collection_name(self, path: Path | str) -> str:
+        return f"job_{_source_key(path)}"
 
     def ingest_chunks(
         self,

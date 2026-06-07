@@ -14,12 +14,13 @@
 ### syslogb (base UI)
 
 - File tail, search, export, LLM/RAG, Chroma, alerts, auth, settings → **`/`** (Flask)
+- Alert rules (target) → unified on **`events.sqlite`**; migrate with **`scripts/migrate-alert-rules.py`**
 - SQLite `analyses.db` → same **`DATA_DIR`** as hub (`/data` in Docker)
 
 ### loggy
 
-- UDP syslog ingest, Palo Alto parsing, Ollama batch → **hub ingest** (background thread)
-- Hourly cards, meta summaries, trends → **`log_intel/loggy_ported/`** (wired incrementally)
+- UDP syslog ingest, Palo Alto parsing, Ollama batch → **hub ingest** + **`log_intel/loggy_ported/analysis_service`**
+- Hourly cards, meta summaries, trends → **`/hub/analysis`** and **`/hub/api/*`** (wired in v0.5.0)
 - Historical logs → optional **`LOGGY_DB_PATH`** read-only mount
 
 ### netsyslog

@@ -161,6 +161,9 @@ class TailService:
             if t:
                 t.stop()
 
+    def set_alert_engine(self, engine) -> None:
+        self._alert_engine = engine
+
     def start(self) -> tuple[bool, str]:
         directories = log_dirs()
         ok, msg = check_log_dirs_access(directories)

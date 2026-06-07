@@ -11,8 +11,9 @@ from pathlib import Path
 from typing import Any
 
 from log_intel.models import LogEvent, StreamEvent
+from log_intel.store_loggy import LogStoreMixin, RawLogRow, migrate_schema_v2
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS schema_version (
@@ -80,7 +81,10 @@ CREATE TABLE IF NOT EXISTS alert_rules (
     cooldown_sec INTEGER NOT NULL DEFAULT 300,
     webhook_url TEXT,
     email_to TEXT,
-    created_at REAL NOT NULL
+    log_dir TEXT,
+    file_glob TEXT,
+    created_at REAL NOT NULL,
+    updated_at REAL
 );
 
 CREATE TABLE IF NOT EXISTS alert_events (
@@ -91,7 +95,10 @@ CREATE TABLE IF NOT EXISTS alert_events (
     ts REAL NOT NULL,
     delivered INTEGER NOT NULL DEFAULT 0,
     payload_json TEXT,
-    origin TEXT NOT NULL DEFAULT 'hub'
+    origin TEXT NOT NULL DEFAULT 'hub',
+    channel TEXT,
+    status TEXT,
+    error TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_alert_events_ts ON alert_events(ts DESC);
@@ -107,7 +114,7 @@ FROM events
 """
 
 
-class EventStore:
+class EventStore(LogStoreMixin):
     def __init__(self, path: str, max_events: int = 500_000) -> None:
         self._path = path
         self._max_events = max_events
@@ -116,14 +123,29 @@ class EventStore:
         self._conn = sqlite3.connect(path, check_same_thread=False)
         self._conn.execute("PRAGMA journal_mode=WAL;")
         self._conn.executescript(SCHEMA)
+        migrate_schema_v2(self._conn)
         cur = self._conn.execute("SELECT version FROM schema_version LIMIT 1")
-        if cur.fetchone() is None:
+        row = cur.fetchone()
+        if row is None:
             self._conn.execute("INSERT INTO schema_version(version) VALUES (?)", (SCHEMA_VERSION,))
+        elif row[0] < SCHEMA_VERSION:
+            migrate_schema_v2(self._conn)
+            self._conn.execute("UPDATE schema_version SET version=?", (SCHEMA_VERSION,))
         self._conn.commit()
 
     def close(self) -> None:
         with self._lock:
             self._conn.close()
+
+    def has_parser(self, parser: str) -> bool:
+        if not parser:
+            return False
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT 1 FROM events WHERE parser = ? LIMIT 1",
+                (parser,),
+            ).fetchone()
+        return row is not None
 
     def insert(self, ev: LogEvent) -> int:
         row = ev.to_insert_row()
@@ -383,38 +405,45 @@ class EventStore:
     def list_alert_rules(self) -> list[dict[str, Any]]:
         with self._lock:
             cur = self._conn.execute(
-                "SELECT id, name, enabled, query, mode, source_type, scope, cooldown_sec, webhook_url, email_to "
-                "FROM alert_rules ORDER BY name"
+                """SELECT id, name, enabled, query, mode, source_type, scope, cooldown_sec,
+                          webhook_url, email_to, log_dir, file_glob
+                   FROM alert_rules ORDER BY name"""
             )
             rows = cur.fetchall()
-        return [
-            {
-                "id": r[0],
-                "name": r[1],
-                "enabled": bool(r[2]),
-                "query": r[3],
-                "mode": r[4],
-                "source_type": r[5],
-                "scope": r[6],
-                "cooldown_sec": r[7],
-                "webhook_url": r[8],
-                "email_to": r[9],
-            }
-            for r in rows
-        ]
+        out = []
+        for r in rows:
+            out.append(
+                {
+                    "id": r[0],
+                    "name": r[1],
+                    "enabled": bool(r[2]),
+                    "query": r[3],
+                    "mode": r[4],
+                    "source_type": r[5],
+                    "scope": r[6],
+                    "cooldown_sec": r[7],
+                    "webhook_url": r[8],
+                    "email_to": r[9],
+                    "log_dir": r[10] if len(r) > 10 else None,
+                    "file_glob": r[11] if len(r) > 11 else None,
+                }
+            )
+        return out
 
-    def upsert_alert_rule(self, rule: dict[str, Any]) -> None:
+    def upsert_alert_rule(self, rule: dict[str, Any]) -> str:
         rid = rule.get("id") or uuid.uuid4().hex[:12]
+        now = time.time()
         with self._lock:
             self._conn.execute(
                 """INSERT INTO alert_rules (id, name, enabled, query, mode, source_type, scope,
-                   cooldown_sec, webhook_url, email_to, created_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                   cooldown_sec, webhook_url, email_to, log_dir, file_glob, created_at, updated_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                    ON CONFLICT(id) DO UPDATE SET
                      name=excluded.name, enabled=excluded.enabled, query=excluded.query,
                      mode=excluded.mode, source_type=excluded.source_type, scope=excluded.scope,
                      cooldown_sec=excluded.cooldown_sec, webhook_url=excluded.webhook_url,
-                     email_to=excluded.email_to""",
+                     email_to=excluded.email_to, log_dir=excluded.log_dir, file_glob=excluded.file_glob,
+                     updated_at=excluded.updated_at""",
                 (
                     rid,
                     rule["name"],
@@ -426,10 +455,14 @@ class EventStore:
                     int(rule.get("cooldown_sec", 300)),
                     rule.get("webhook_url"),
                     rule.get("email_to"),
-                    time.time(),
+                    rule.get("log_dir"),
+                    rule.get("file_glob"),
+                    now,
+                    now,
                 ),
             )
             self._conn.commit()
+        return rid
 
     def delete_alert_rule(self, rule_id: str) -> bool:
         with self._lock:
@@ -447,11 +480,15 @@ class EventStore:
         delivered: bool,
         payload: dict[str, Any] | None = None,
         origin: str = "hub",
+        channel: str | None = None,
+        status: str | None = None,
+        error: str | None = None,
     ) -> None:
         with self._lock:
             self._conn.execute(
-                """INSERT INTO alert_events (rule_id, source, line, ts, delivered, payload_json, origin)
-                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                """INSERT INTO alert_events (rule_id, source, line, ts, delivered, payload_json, origin,
+                   channel, status, error)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     rule_id,
                     source,
@@ -460,6 +497,9 @@ class EventStore:
                     1 if delivered else 0,
                     json.dumps(payload) if payload else None,
                     origin,
+                    channel,
+                    status,
+                    error,
                 ),
             )
             self._conn.commit()
@@ -520,3 +560,8 @@ def to_stream_event(ev: LogEvent) -> StreamEvent:
         action=ev.action,
         importance=importance_for_event(ev),
     )
+
+
+LogStore = EventStore
+
+__all__ = ["EventStore", "LogStore", "RawLogRow", "importance_for_event", "to_stream_event"]

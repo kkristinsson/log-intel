@@ -170,12 +170,12 @@ COMPRESSED_SUFFIXES = (
     ".zip",
 )
 
-APP_NAME = _env("APP_NAME", "syslogb")
+APP_NAME = _env("APP_NAME", "log-intel")
 # Path under web/static/, or full https:// URL. Empty = no logo.
-BRAND_LOGO = _env("BRAND_LOGO", "branding/syslogb.jpg")
-BRAND_LOGO_LINK = _env("BRAND_LOGO_LINK", "https://www.comlink.se")
-BRAND_TAGLINE = _env("BRAND_TAGLINE", "")
-COPYRIGHT_TEXT = _env("COPYRIGHT_TEXT", "SyslogB by Kristinsson Consulting")
+BRAND_LOGO = _env("BRAND_LOGO", "branding/log-intel.png")
+BRAND_LOGO_LINK = _env("BRAND_LOGO_LINK", "")
+BRAND_TAGLINE = _env("BRAND_TAGLINE", "Unified log intelligence — files + network syslog")
+COPYRIGHT_TEXT = _env("COPYRIGHT_TEXT", "log-intel by Kristinsson Consulting")
 
 from log_intel.syslogb.app.version import __version__ as _APP_VERSION_DEFAULT
 
@@ -207,3 +207,4 @@ SMTP_PASSWORD = _env("SMTP_PASSWORD", "")
 SMTP_FROM = _env("SMTP_FROM", "")
 SMTP_TLS = _env("SMTP_TLS", "1").lower() in ("1", "true", "yes", "on")
 ALERT_MAX_PER_MINUTE = _env_int("ALERT_MAX_PER_MINUTE", 30)
+WEBHOOK_INGEST_SECRET = _env("WEBHOOK_INGEST_SECRET", "")

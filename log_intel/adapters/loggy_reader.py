@@ -10,6 +10,7 @@ from typing import Any
 
 from log_intel.config import get_settings
 from log_intel.models import LogEvent
+from log_intel.sources_registry import adapter_source, resolve_env_path
 
 log = logging.getLogger(__name__)
 
@@ -17,7 +18,9 @@ log = logging.getLogger(__name__)
 class LoggyReader:
     def __init__(self, db_path: str | None = None) -> None:
         settings = get_settings()
-        self._path = db_path or settings.loggy_db_path
+        src = adapter_source("loggy")
+        env_path = resolve_env_path(src.db_path_env if src else "LOGGY_DB_PATH")
+        self._path = db_path or env_path or settings.loggy_db_path
 
     @property
     def available(self) -> bool:
@@ -54,6 +57,49 @@ class LoggyReader:
             conn.close()
         except Exception as e:
             log.warning("loggy read failed: %s", e)
+            return []
+
+        out: list[LogEvent] = []
+        for rid, received_at, remote_ip, transport, message in rows:
+            out.append(
+                LogEvent(
+                    id=-rid,
+                    received_at=float(received_at),
+                    source_type="imported",
+                    source_id="loggy",
+                    remote_ip=remote_ip or "",
+                    transport=transport or "udp",
+                    raw=message or "",
+                    message=message or "",
+                    parser="loggy_import",
+                )
+            )
+        return out
+
+    def search(
+        self,
+        query: str,
+        *,
+        since: float | None = None,
+        limit: int = 200,
+    ) -> list[LogEvent]:
+        if not self.available or not query.strip():
+            return []
+        since = since or 0.0
+        pattern = f"%{query.strip()}%"
+        try:
+            conn = sqlite3.connect(f"file:{self._path}?mode=ro", uri=True)
+            cur = conn.execute(
+                """SELECT id, received_at, remote_ip, transport, message
+                   FROM raw_logs
+                   WHERE received_at >= ? AND message LIKE ?
+                   ORDER BY received_at DESC LIMIT ?""",
+                (since, pattern, limit),
+            )
+            rows = cur.fetchall()
+            conn.close()
+        except Exception as e:
+            log.warning("loggy search failed: %s", e)
             return []
 
         out: list[LogEvent] = []

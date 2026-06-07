@@ -10,18 +10,22 @@ function fmtTs(ts) {
 
 function renderLine(container, item, cls = "") {
   const div = document.createElement("div");
-  div.className = `log-line ${cls} ${item.importance || ""}`;
+  const sev = item.llm_severity || item.severity;
+  div.className = `log-line ${cls} ${item.importance || ""} ${sev ? `sev-${sev}` : ""}`;
   const meta = document.createElement("div");
   meta.className = "meta";
-  meta.textContent = [
+  const parts = [
     item.origin || item.source_type || "hub",
+    item.source,
     fmtTs(item.received_at || item.ts),
     item.remote_ip,
     item.log_type,
     item.action,
-  ].filter(Boolean).join(" · ");
+  ].filter(Boolean);
+  if (sev) parts.push(`LLM:${sev}`);
+  meta.textContent = parts.join(" · ");
   const body = document.createElement("div");
-  body.textContent = item.message || item.line || JSON.stringify(item);
+  body.textContent = item.message || item.line || item.summary || JSON.stringify(item);
   div.append(meta, body);
   container.prepend(div);
   while (container.children.length > 300) {
@@ -45,6 +49,10 @@ async function loadHealth() {
   add("syslogb", data.adapters?.syslogb?.integrated ? "Integrated" : (data.adapters?.syslogb?.ok ? "OK" : "N/A"), true);
   add("loggy archive", data.adapters?.loggy?.ok ? "OK" : "N/A", data.adapters?.loggy?.ok);
   add("netsyslog archive", data.adapters?.netsyslog?.ok ? "OK" : "N/A", data.adapters?.netsyslog?.ok);
+  const journalOk = data.adapters?.ingest?.journal_ok ?? data.journal_ok;
+  if (journalOk !== undefined) {
+    add("systemd journal", journalOk ? "OK" : "Off", !!journalOk);
+  }
 }
 
 async function loadOverviewEvents() {
@@ -62,7 +70,10 @@ let liveSource = null;
 function startLive() {
   if (liveSource) liveSource.close();
   const imp = $("#live-importance").value;
-  liveSource = new EventSource(`/api/v1/stream?importance_min=${imp}`);
+  const syslogb = $("#include-syslogb-live")?.checked ? "true" : "false";
+  liveSource = new EventSource(
+    `/api/v1/stream?importance_min=${imp}&include_syslogb=${syslogb}`
+  );
   const box = $("#live-feed");
   liveSource.onmessage = (e) => {
     const ev = JSON.parse(e.data);
@@ -76,10 +87,20 @@ async function doSearch(e) {
   if (!q) return;
   const syslogb = $("#include-syslogb").checked;
   const loggy = $("#include-loggy").checked;
+  const mode = $("#search-mode").value;
+  const hours = $("#search-hours").value;
   const r = await fetch(
-    `/api/v1/search?q=${encodeURIComponent(q)}&include_syslogb=${syslogb}&include_loggy=${loggy}`
+    `/api/v1/search?q=${encodeURIComponent(q)}&mode=${mode}&hours=${hours}` +
+    `&include_syslogb=${syslogb}&include_loggy=${loggy}`
   );
   const data = await r.json();
+  const meta = $("#search-meta");
+  if (meta) {
+    const parts = Object.entries(data.counts_by_origin || {}).map(
+      ([k, v]) => `${k}: ${v}`
+    );
+    meta.textContent = parts.length ? `Matches — ${parts.join(", ")}` : "";
+  }
   const box = $("#search-results");
   box.innerHTML = "";
   for (const item of data.results || []) {
@@ -126,14 +147,125 @@ async function loadGeo() {
   }
 }
 
+async function loadAlertRules() {
+  const r = await fetch("/api/v1/alert-rules");
+  const data = await r.json();
+  const box = $("#alert-rules-list");
+  if (!box) return;
+  box.innerHTML = "";
+  for (const rule of data.rules || []) {
+    const div = document.createElement("div");
+    div.className = "log-line";
+    div.innerHTML = `<div class="meta">${rule.name} · ${rule.mode} · ${rule.scope} · ${rule.enabled ? "on" : "off"}</div>` +
+      `<div>${rule.query}</div>`;
+    box.appendChild(div);
+  }
+}
+
+async function saveAlertRule(e) {
+  e.preventDefault();
+  const body = {
+    id: $("#alert-rule-id").value || undefined,
+    name: $("#alert-rule-name").value.trim(),
+    query: $("#alert-rule-query").value.trim(),
+    mode: $("#alert-rule-mode").value,
+    scope: $("#alert-rule-scope").value,
+    webhook_url: $("#alert-rule-webhook").value.trim() || null,
+    enabled: $("#alert-rule-enabled").checked,
+  };
+  await fetch("/api/v1/alert-rules", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  await loadAlertRules();
+}
+
 async function loadAlerts() {
+  await loadAlertRules();
   const r = await fetch("/api/v1/alert-events?limit=100");
   const data = await r.json();
   const box = $("#alert-events");
   box.innerHTML = "";
   for (const ev of data.events || []) {
-    renderLine(box, { message: ev.line, origin: ev.origin, ts: ev.ts, importance: "warning" });
+    renderLine(box, {
+      message: ev.line,
+      origin: ev.origin,
+      ts: ev.ts,
+      importance: ev.status === "sent" ? "warning" : "info",
+    });
   }
+}
+
+async function loadAnalysisHourly() {
+  const hours = $("#analysis-hours")?.value || 168;
+  const r = await fetch(`/hub/api/analyses/recent?hours=${hours}`);
+  const data = await r.json();
+  const box = $("#analysis-cards");
+  if (!box) return;
+  box.innerHTML = "";
+  for (const a of data.analyses || []) {
+    renderLine(box, {
+      severity: a.severity,
+      summary: a.summary,
+      ts: a.created_at,
+      importance: a.severity === "critical" || a.severity === "high" ? "error" : "info",
+    });
+  }
+  const st = await fetch("/hub/api/analyze/status");
+  const status = await st.json();
+  const out = $("#analysis-status");
+  if (out) {
+    out.textContent = `Pending ${data.pending_in_window} · ${status.state}: ${status.message || ""}`;
+  }
+}
+
+async function loadTrends() {
+  const days = $("#trends-days")?.value || 14;
+  const r = await fetch(`/hub/api/trends/daily?days=${days}`);
+  const data = await r.json();
+  const meta = $("#trends-meta");
+  if (meta) {
+    meta.textContent = `${data.baseline?.title || ""} — ${data.narrative || ""}`;
+  }
+  const box = $("#trends-bars");
+  if (!box) return;
+  box.innerHTML = "";
+  for (const row of data.rows || []) {
+    const div = document.createElement("div");
+    div.className = "log-line";
+    div.textContent = `${row.day}: ${row.analyses_total} analyses, elevated ${row.elevated_total}`;
+    box.appendChild(div);
+  }
+}
+
+async function startWindowAnalysis() {
+  const hours = parseFloat($("#analysis-hours")?.value || 24);
+  await fetch("/hub/api/analyze/start", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ hours }),
+  });
+  const poll = setInterval(async () => {
+    await loadAnalysisHourly();
+    const st = await fetch("/hub/api/analyze/status");
+    const status = await st.json();
+    if (status.state !== "running") clearInterval(poll);
+  }, 3000);
+}
+
+async function cancelWindowAnalysis() {
+  await fetch("/hub/api/analyze/cancel", { method: "POST" });
+  loadAnalysisHourly();
+}
+
+function showAnalysisPane(name) {
+  $$(".analysis-pane").forEach((p) => p.classList.remove("active"));
+  $$(".analysis-subtabs button").forEach((b) => b.classList.remove("active"));
+  $(`#analysis-${name}`)?.classList.add("active");
+  $(`.analysis-subtabs button[data-analysis="${name}"]`)?.classList.add("active");
+  if (name === "hourly") loadAnalysisHourly();
+  if (name === "trends") loadTrends();
 }
 
 async function runAnalyze(e) {
@@ -171,14 +303,27 @@ $$("#tabs button").forEach((btn) => {
     if (btn.dataset.tab === "geo") { initMap(); loadGeo(); }
     if (btn.dataset.tab === "firewall") loadFirewall();
     if (btn.dataset.tab === "alerts") loadAlerts();
+    if (btn.dataset.tab === "analysis") showAnalysisPane("hourly");
   });
 });
 
+$$(".analysis-subtabs button").forEach((btn) => {
+  btn.addEventListener("click", () => showAnalysisPane(btn.dataset.analysis));
+});
+
 $("#live-importance").addEventListener("change", startLive);
+const syslogbLiveCb = $("#include-syslogb-live");
+if (syslogbLiveCb) syslogbLiveCb.addEventListener("change", startLive);
 $("#search-form").addEventListener("submit", doSearch);
 $("#fw-refresh").addEventListener("click", loadFirewall);
 $("#geo-refresh").addEventListener("click", loadGeo);
-$("#analyze-form").addEventListener("submit", runAnalyze);
+$("#analyze-form")?.addEventListener("submit", runAnalyze);
+$("#alert-rule-form")?.addEventListener("submit", saveAlertRule);
+$("#alert-rules-refresh")?.addEventListener("click", loadAlertRules);
+$("#analysis-refresh")?.addEventListener("click", loadAnalysisHourly);
+$("#analysis-start")?.addEventListener("click", startWindowAnalysis);
+$("#analysis-cancel")?.addEventListener("click", cancelWindowAnalysis);
+$("#trends-refresh")?.addEventListener("click", loadTrends);
 
 loadHealth();
 loadOverviewEvents();

@@ -11,6 +11,7 @@ from typing import Any
 import httpx
 
 from log_intel.config import get_settings
+from log_intel.sources_registry import adapter_source, resolve_env_path
 
 log = logging.getLogger(__name__)
 
@@ -23,7 +24,9 @@ class NetsyslogReader:
         timeout: float = 10.0,
     ) -> None:
         settings = get_settings()
-        self._db_path = db_path or settings.netsyslog_db_path
+        src = adapter_source("netsyslog")
+        env_path = resolve_env_path(src.db_path_env if src else "NETSYSLOG_DB_PATH")
+        self._db_path = db_path or env_path or settings.netsyslog_db_path
         self._api_url = (api_url or settings.netsyslog_api_url).rstrip("/")
         self._timeout = timeout
 

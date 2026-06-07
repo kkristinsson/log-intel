@@ -190,3 +190,4 @@ def refresh_config_module(store: AppStore) -> None:
     config.SMTP_TLS = _coerce(values.get("SMTP_TLS", "1"), "bool")
     config.SMTP_PASSWORD = values.get("SMTP_PASSWORD", "")
     config.ALERT_MAX_PER_MINUTE = _coerce(values.get("ALERT_MAX_PER_MINUTE", "30"), "int")
+    config.WEBHOOK_INGEST_SECRET = values.get("WEBHOOK_INGEST_SECRET", "")

@@ -12,6 +12,7 @@ from urllib.parse import urlparse
 import requests
 
 from log_intel.syslogb.app import config
+from log_intel.syslogb.app.security import validate_outbound_webhook_url
 
 logger = logging.getLogger(__name__)
 
@@ -94,6 +95,9 @@ def send_webhook(url: str, payload: dict[str, Any]) -> tuple[bool, str]:
     url = (url or "").strip()
     if not url:
         return False, "webhook_url empty"
+    ok, err = validate_outbound_webhook_url(url)
+    if not ok:
+        return False, err
     body = format_webhook_payload(url, payload)
     try:
         resp = requests.post(url, json=body, timeout=30)

@@ -116,24 +116,45 @@ class AnalysisScheduler:
             self._start_schedule(sched, now)
 
     def _start_schedule(self, sched: dict[str, Any], now: float) -> None:
-        path = Path(sched["file_path"])
-        if not path.is_file() or not is_readable_file(path):
-            logger.warning("Scheduled analysis skipped, file missing: %s", path)
-            nxt = compute_next_run(
-                sched["interval_days"], sched["run_at_hour"], after=now
-            )
-            self._store.update_analysis_schedule_run(
-                sched["id"],
-                last_run_at=now,
-                last_status="skipped",
-                last_error="file not found or not readable",
-                next_run_at=nxt,
-            )
-            return
+        path_str = sched["file_path"]
+        from log_intel.syslogb.app.journal_source import is_journal_source
+
+        if is_journal_source(path_str):
+            scope = sched.get("scope") or "window"
+            if scope != "window":
+                logger.warning("Scheduled journal analysis skipped (requires window scope): %s", path_str)
+                nxt = compute_next_run(sched["interval_days"], sched["run_at_hour"], after=now)
+                self._store.update_analysis_schedule_run(
+                    sched["id"],
+                    last_run_at=now,
+                    last_status="skipped",
+                    last_error="journal requires window scope",
+                    next_run_at=nxt,
+                )
+                return
+            path = path_str
+        else:
+            path = Path(path_str)
+            if not path.is_file() or not is_readable_file(path):
+                logger.warning("Scheduled analysis skipped, file missing: %s", path)
+                nxt = compute_next_run(
+                    sched["interval_days"], sched["run_at_hour"], after=now
+                )
+                self._store.update_analysis_schedule_run(
+                    sched["id"],
+                    last_run_at=now,
+                    last_status="skipped",
+                    last_error="file not found or not readable",
+                    next_run_at=nxt,
+                )
+                return
         scope = sched.get("scope") or "full"
         window = sched.get("window") or ""
         job_mode = f"window:{window}" if scope == "window" else "full"
-        job_id = self._store.create_job(str(path.resolve()), mode=f"schedule:{job_mode}")
+        job_id = self._store.create_job(
+            str(path) if isinstance(path, Path) else path,
+            mode=f"schedule:{job_mode}",
+        )
         nxt = compute_next_run(sched["interval_days"], sched["run_at_hour"], after=now)
         self._store.update_analysis_schedule_run(
             sched["id"],
@@ -146,10 +167,11 @@ class AnalysisScheduler:
         with self._lock:
             self._pending[job_id] = sched["id"]
         win = window if scope == "window" else None
-        self._worker.enqueue(job_id, path.resolve(), window=win)
+        source = path if isinstance(path, str) else path.resolve()
+        self._worker.enqueue(job_id, source, window=win)
         logger.info(
             "Scheduled analysis started: %s job=%s next=%s",
-            path.name,
+            path if isinstance(path, str) else path.name,
             job_id,
             datetime.fromtimestamp(nxt).isoformat(),
         )

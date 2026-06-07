@@ -19,7 +19,9 @@ Replaces standalone **syslogb**, **loggy**, **netsyslog**, and **syslogpusher**.
 
 **File logs (`/`)** — multi-directory tail, **systemd journal** (`journalctl`), search, export, LLM analysis, RAG/Chroma, alerts, auth, settings wizard.
 
-**Network hub (`/hub`)** — Palo Alto + Windows syslog ingest, GeoIP, live feed, firewall view, flow map, hub Ollama triage.
+**Network hub (`/hub`)** — Palo Alto + Windows syslog ingest, GeoIP, live feed (optional file/journal failures), **unified search** across hub + files + loggy archive, firewall view, flow map, **LLM analysis** (hourly/trends/on-demand), **unified alerts** (hub + file/journal tail).
+
+**Unified intelligence (v0.5.0)** — cross-source search, multiplex live stream, EventStore schema v2 (`analyses` + `meta_summaries`), runtime `config/sources.yaml`, journal window LLM, single alert engine on `events.sqlite`. Migrate syslogb alert rules: `scripts/migrate-alert-rules.py`.
 
 **Syslog Pusher (Windows)** — [`syslog-pusher/`](syslog-pusher/) forwards Windows event logs and watched log files to the hub (or rsyslog). Pre-built installer: `syslog-pusher/dist/SyslogPusher.exe`.
 
@@ -84,7 +86,7 @@ ollama pull qwen3.6:27b-q8_0
 ollama pull nomic-embed-text
 ```
 
-Set `LOG_INTEL_LLM_ENABLED=1` in `.env` to enable hub background triage.
+Set `LOG_INTEL_LLM_ENABLED=1` for **on-demand** hub LLM (`/hub/analysis`). Background batch triage is opt-in: `LOG_INTEL_ANALYSIS_AUTO=1`. Meta rollups: `META_SUMMARY_ENABLED=1`.
 
 ## Docker (production)
 
@@ -133,7 +135,8 @@ LOG_RECURSIVE=1                     # nested remote host logs
 AUTH_ENABLED=1                      # sign-in required
 BRAND_LOGO=branding/syslogb.jpg     # under web/static/
 OLLAMA_BASE_URL=http://127.0.0.1:11434
-LOG_INTEL_LLM_ENABLED=1             # hub network syslog triage
+LOG_INTEL_LLM_ENABLED=1             # hub on-demand LLM (/hub/analysis)
+LOG_INTEL_ANALYSIS_AUTO=0           # set 1 only if you want hourly background batches
 ```
 
 Migrating from syslogb? Run:

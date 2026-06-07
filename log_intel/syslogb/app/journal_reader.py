@@ -28,6 +28,23 @@ def journal_meta(uri: str) -> dict[str, Any]:
     }
 
 
+def read_journal_window(uri: str, window: str | None) -> tuple[list[str], str]:
+    """Load journal lines for a UI time window (15m, 1h, …)."""
+    from log_intel.syslogb.app.file_reader import window_to_since_ts
+
+    spec = parse_journal_uri(uri)
+    since_ts = window_to_since_ts(window or "1h")
+    since_arg = None
+    if since_ts is not None:
+        since_arg = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(since_ts))
+    lines, err = read_journal_lines(spec, max_lines=config.JOURNAL_PAGE_LINES * 20, since=since_arg)
+    if err:
+        raise RuntimeError(err)
+    label = (window or "1h").strip().lower()
+    note = f"Journal window ({label}) from {uri}: {len(lines)} lines"
+    return lines, note
+
+
 def read_journal_page(
     uri: str,
     *,

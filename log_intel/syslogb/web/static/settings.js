@@ -14,12 +14,14 @@
   let fieldInputs = {};
   let currentProvider = "ollama";
 
-  const SECTION_ORDER = ["server", "logging", "search", "llm", "auth", "alerts", "branding"];
+  const SECTION_ORDER = ["server", "logging", "search", "llm", "hub", "mist", "auth", "alerts", "branding"];
   const SECTION_LABELS = {
     server: "Server",
     logging: "Logging",
     search: "Search & export",
     llm: "LLM options",
+    hub: "Hub & network syslog",
+    mist: "Juniper Mist",
     auth: "Authentication",
     alerts: "Email alerts",
     branding: "Branding",

@@ -58,13 +58,16 @@ def init_syslogb() -> Flask:
     if _runtime is not None:
         return _runtime.app
 
-    config.DATA_DIR.mkdir(parents=True, exist_ok=True)
+    from log_intel.settings_bridge import bootstrap_settings_store, get_app_store
 
-    store = AppStore()
-    store.seed_settings_if_empty()
-    store.ensure_legacy_setup_complete()
-    store.seed_settings_values_from_env_if_empty()
-    refresh_config_module(store)
+    store = get_app_store()
+    if store is None:
+        store = bootstrap_settings_store()
+    else:
+        refresh_config_module(store)
+
+    config.DATA_DIR.mkdir(parents=True, exist_ok=True)
+    config.CHROMA_DIR.mkdir(parents=True, exist_ok=True)
 
     from log_intel.syslogb.app.timestamp_parsers import refresh_parsers_cache
 
@@ -88,6 +91,17 @@ def init_syslogb() -> Flask:
     from log_intel.hub_flask import register_hub_routes
 
     register_hub_routes(app)
+
+    hub = None
+    try:
+        from log_intel.main import get_hub
+
+        hub = get_hub()
+    except Exception:
+        pass
+    if hub is not None:
+        tail_service.set_alert_engine(hub.alert_engine)
+        log.info("TailService wired to unified hub alert engine")
 
     _runtime = SyslogbRuntime(
         app=app,

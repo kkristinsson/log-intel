@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import os
 import sqlite3
 import time
 from pathlib import Path
@@ -48,6 +49,8 @@ COPY_FROM_SYSLOGB = {
     "COPYRIGHT_TEXT",
 }
 
+import os
+
 # Docker-adjusted or .env overrides for log-intel.
 OVERRIDES = {
     "APP_NAME": "log-intel",
@@ -58,13 +61,13 @@ OVERRIDES = {
     "OLLAMA_TIMEOUT_SEC": "800",
     "OLLAMA_JSON_FORMAT": "1",
     "AUTH_ENABLED": "1",
-    "FLASK_SECRET_KEY": "82538f9696147b12ead839dce9cbe36a74c027baf09ac90eae725b5c4be3cca6",
-    "LOCAL_AUTH_USERNAME": "admin",
-    "LOCAL_AUTH_PASSWORD": "c0mpt0n",
+    "FLASK_SECRET_KEY": os.environ.get("FLASK_SECRET_KEY", ""),
+    "LOCAL_AUTH_USERNAME": os.environ.get("LOCAL_AUTH_USERNAME", "admin"),
+    "LOCAL_AUTH_PASSWORD": os.environ.get("LOCAL_AUTH_PASSWORD", ""),
     "BRAND_LOGO": "branding/syslogb.jpg",
     "BRAND_LOGO_LINK": "",
     "BRAND_TAGLINE": "",
-    "COPYRIGHT_TEXT": "Syslogb by Kristinsson Consulting",
+    "COPYRIGHT_TEXT": "log-intel by Kristinsson Consulting",
     "FILE_RECENT_BYTES": "524288",
     "SEARCH_MAX_RESULTS": "2000",
     "SEARCH_MAX_BYTES_PER_FILE": "5242880",

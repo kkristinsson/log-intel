@@ -243,11 +243,12 @@ echo "log-intel installed in: $ROOT"
 echo
 echo "Next steps:"
 echo "  1. Copy GeoIP database to geoip/dbip-city-lite.mmdb (optional, for /hub geo map)"
-echo "  2. Edit .env — LOG_DIRS, auth (AUTH_ENABLED), branding (BRAND_LOGO)"
+echo "  2. Start the app — first visit opens the setup wizard and seeds Settings from .env"
+echo "  3. Configure everything in Settings (LOG_DIRS, LLM, Hub LLM, auth, branding)"
 if [[ "$REMOTE_KEY_SAVED" != "1" && "$LLM_SETUP" != "ollama" && "$LLM_SETUP" != "berget" ]]; then
-  echo "     Add LLM_API_KEY if using remote chat"
+  echo "     Add LLM_API_KEY in Settings or .env for first-run seed if using remote chat"
 fi
-echo "  3. Native dev:  source .venv/bin/activate && log-intel"
+echo "  4. Native dev:  source .venv/bin/activate && log-intel"
 echo "     Production:   gunicorn -w 1 -k gthread --threads 8 --timeout 600 -b 0.0.0.0:9088 log_intel.wsgi:application"
 echo "     Docker:       docker compose up -d --build"
 echo

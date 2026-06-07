@@ -7,6 +7,7 @@ import time
 from log_intel.models import LogEvent
 from log_intel.parsers.generic import is_windows_rfc5424, parse_generic_syslog
 from log_intel.parsers.palo_alto import is_palo_alto_message, parse_palo_alto_syslog
+from log_intel.sources_registry import classify_source_type
 
 
 def classify_and_parse(
@@ -25,7 +26,13 @@ def classify_and_parse(
         if ev is not None:
             return ev
 
-    st = "windows" if is_windows_rfc5424(raw) else "generic"
+    hinted = classify_source_type(raw, msg_body)
+    if hinted == "windows" or (hinted is None and is_windows_rfc5424(raw)):
+        st = "windows"
+    elif hinted:
+        st = hinted
+    else:
+        st = "generic"
     return parse_generic_syslog(
         raw,
         peer_ip,
