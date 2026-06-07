@@ -7,6 +7,7 @@
 | **syslogb** | `~/local-devel/syslogb` | **Deprecated** — full app vendored at `log_intel/syslogb/` |
 | **loggy** | `~/local-devel/loggy` | **Deprecated** — network ingest + analysis in hub; archive via read-only DB mount |
 | **netsyslog** | `~/local-devel/netsyslog` | **Deprecated** — geo flows + PA parsing in hub; archive via read-only DB mount |
+| **syslogpusher** | `~/local-devel/syslogpusher` | **Deprecated** — Windows client lives at [`syslog-pusher/`](syslog-pusher/) |
 
 ## What moved where
 
@@ -26,6 +27,12 @@
 - Geo flow aggregates, great-circle map → **`/hub/geo`** and **`/api/v1/flows`**
 - Historical events → optional **`NETSYSLOG_DB_PATH`** read-only mount
 
+### syslogpusher (Windows client)
+
+- WPF wizard, Windows service, file/event collectors → **`syslog-pusher/`**
+- Pre-built binary → **`syslog-pusher/dist/SyslogPusher.exe`**
+- Point destination at log-intel syslog port (default host **5516** → container **514**)
+
 ## Single deployment
 
 ```bash
@@ -43,9 +50,10 @@ docker compose up -d --build
 ## Cutover checklist
 
 1. Point Palo Alto syslog fan-out to **log-intel :5516** only.
-2. Point Syslog Pusher (Windows) to the same port.
-3. Set **`LOG_DIRS`** (or mount `/var/log`) for file-tail if using rsyslog remote files.
-4. Stop separate **syslogb**, **loggy**, and **netsyslog** containers/services.
-5. Keep old `data/` volumes mounted read-only until archive retention expires.
+2. Deploy **`syslog-pusher/dist/SyslogPusher.exe`** on Windows hosts (or rebuild from `syslog-pusher/`).
+3. Point Syslog Pusher destination to the same log-intel syslog port.
+4. Set **`LOG_DIRS`** (or mount `/var/log`) for file-tail if using rsyslog remote files.
+5. Stop separate **syslogb**, **loggy**, **netsyslog**, and standalone **syslogpusher** repos/services.
+6. Keep old `data/` volumes mounted read-only until archive retention expires.
 
 Original repos are **not deleted** — they remain as reference and rollback copies.

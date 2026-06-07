@@ -1,12 +1,20 @@
 .venv/
 venv/
-data/
+/data/
 geoip/*.mmdb
 .env
-dist/
+/dist/
 build/
 __pycache__/
 *.py[cod]
 *.egg-info/
 .pytest_cache/
 .DS_Store
+
+# syslog-pusher (.NET) build output — keep dist/SyslogPusher.exe tracked
+syslog-pusher/**/bin/
+syslog-pusher/**/obj/
+syslog-pusher/**/artifacts/
+syslog-pusher/**/.vs/
+syslog-pusher/**/*.user
+syslog-pusher/**/*.suo

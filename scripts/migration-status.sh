@@ -22,7 +22,7 @@ echo "--- Manual steps (cannot automate from this host) ---"
 echo "Phase 1 PA fan-out: add syslog server ${HOST_IP}:${HUB_SYSLOG} (UDP/TCP) alongside existing loggy ${HOST_IP}:5514"
 echo "Phase 2 syslogb:   alert webhook → http://${HOST_IP}:${HUB_HTTP}/api/v1/webhooks/syslogb"
 echo "Phase 3 cutover:   PA → ${HOST_IP}:${HUB_SYSLOG} only, then stop loggy syslog publish"
-echo "Windows:           Syslog Pusher → ${HOST_IP}:${HUB_SYSLOG} (or rsyslog :514 for file bridge)"
+echo "Windows:           syslog-pusher/dist/SyslogPusher.exe → ${HOST_IP}:${HUB_SYSLOG} (or rsyslog :514 for file bridge)"
 echo ""
 
 echo "--- Optional rsyslog file bridge (syslogb) ---"

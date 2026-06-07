@@ -4,21 +4,24 @@
 
 # log-intel — Unified Log Intelligence
 
-Single app combining **syslogb** (file logs, search, LLM/RAG, alerts) and a **network hub** (syslog ingest, Palo Alto parsing, geo flows).
+Single app combining **syslogb** (file logs, search, LLM/RAG, alerts) and a **network hub** (syslog ingest, Palo Alto parsing, geo flows), plus **Syslog Pusher** (Windows client) in the same repo.
 
-Replaces standalone **syslogb**, **loggy**, and **netsyslog**. See [DEPRECATION.md](DEPRECATION.md).
+Replaces standalone **syslogb**, **loggy**, **netsyslog**, and **syslogpusher**. See [DEPRECATION.md](DEPRECATION.md).
 
-| UI | URL |
-|----|-----|
+| Component | Where |
+|-----------|--------|
 | File logs (syslogb) | http://host:9088/ |
 | Network hub | http://host:9088/hub |
-| Syslog ingest | UDP/TCP **514** (or remapped host port, e.g. **5516**) |
+| Syslog ingest (Linux hub) | UDP/TCP **514** (or remapped host port, e.g. **5516**) |
+| Windows client | [`syslog-pusher/`](syslog-pusher/) — `dist/SyslogPusher.exe` |
 
 ## Features
 
 **File logs (`/`)** — multi-directory tail, **systemd journal** (`journalctl`), search, export, LLM analysis, RAG/Chroma, alerts, auth, settings wizard.
 
 **Network hub (`/hub`)** — Palo Alto + Windows syslog ingest, GeoIP, live feed, firewall view, flow map, hub Ollama triage.
+
+**Syslog Pusher (Windows)** — [`syslog-pusher/`](syslog-pusher/) forwards Windows event logs and watched log files to the hub (or rsyslog). Pre-built installer: `syslog-pusher/dist/SyslogPusher.exe`.
 
 ## Requirements
 
@@ -171,13 +174,51 @@ Example systemd unit: `config/systemd/log-intel.service`
 
 Embed server unit (hybrid setups): `config/systemd/ollama-syslogb.service` → installed as `ollama-log-intel` by `scripts/install-ollama-embed.sh`
 
-## Migration from syslogb / loggy / netsyslog
+## Syslog Pusher (Windows)
+
+Windows hosts forward event logs and file tails to log-intel via **[syslog-pusher/](syslog-pusher/)** — a self-contained WPF app + Windows service (C# / .NET 8).
+
+### Quick install (Windows)
+
+1. Copy **`syslog-pusher/dist/SyslogPusher.exe`** to the server (or build from source — see [syslog-pusher/README.md](syslog-pusher/README.md)).
+2. Run the exe → complete the setup wizard.
+3. Set destination to your log-intel host, e.g. **`192.168.101.115`** port **`5516`** (UDP or TCP).
+
+Logs appear in the hub live feed and in `/var/log/remote/<hostname>/` if you route through rsyslog instead.
+
+### Build from source (Windows)
+
+Requires [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0):
+
+```powershell
+cd syslog-pusher
+.\scripts\publish.ps1
+```
+
+Output: `syslog-pusher\dist\SyslogPusher.exe` (single-file, win-x64, self-contained).
+
+### Pairing tips
+
+- Enable **Only new** on directory watches with large historical logs (e.g. `Pri.log`) to avoid replay bursts after service restart.
+- log-intel includes a built-in **SMS Pri logs** timestamp parser for `Pri.log` — see **Help** on the file logs UI.
+
+## Repository layout
+
+```
+log_intel/           Python app (syslogb UI + network hub)
+syslog-pusher/       Windows client (C#) — source + dist/SyslogPusher.exe
+config/              rsyslog drop-in, systemd units
+scripts/             install, migration helpers
+```
+
+## Migration from syslogb / loggy / netsyslog / syslogpusher
 
 1. `./install.sh` or Docker deploy
 2. `python3 scripts/sync-syslogb-settings.py` — copy your syslogb SQLite settings
 3. Copy `syslogb/data/chroma/` → `log-intel/data/chroma/` if you want existing RAG indices
 4. Point Palo Alto syslog to log-intel port
-5. Stop old containers — [DEPRECATION.md](DEPRECATION.md)
+5. Deploy Windows clients from `syslog-pusher/dist/SyslogPusher.exe`
+6. Stop old containers and standalone repos — [DEPRECATION.md](DEPRECATION.md)
 
 ## API
 

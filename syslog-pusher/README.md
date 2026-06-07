@@ -1,6 +1,6 @@
 # Syslog Pusher
 
-Syslog Pusher is a Windows service that forwards **Windows event logs** and **log files from watched directories** to a remote **syslog** server over **UDP** or **TCP**. All setup and ongoing changes are done through a **graphical WPF application** — no manual editing of config files.
+Part of the **[log-intel](../README.md)** monorepo. Syslog Pusher is a Windows service that forwards **Windows event logs** and **log files from watched directories** to a remote **syslog** server over **UDP** or **TCP**. All setup and ongoing changes are done through a **graphical WPF application** — no manual editing of config files.
 
 ## Features
 
@@ -24,7 +24,7 @@ See [REQUIREMENTS.txt](REQUIREMENTS.txt) for supported Windows versions, .NET ru
 Requires [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0).
 
 ```powershell
-cd syslogpusher
+cd syslog-pusher
 .\scripts\publish.ps1
 ```
 
@@ -34,10 +34,11 @@ The same executable opens the configuration UI when run interactively, and runs 
 
 ## Install
 
-1. Copy **`dist\SyslogPusher.exe`** to the machine.
+1. Copy **`dist\SyslogPusher.exe`** to the Windows machine (pre-built binary is committed in this repo).
 2. Run **`SyslogPusher.exe`** (first launch opens the setup wizard).
-3. Complete the wizard and click **Install** (elevates to Administrator).
-4. The service is registered, configuration is saved, and forwarding starts.
+3. Set destination to your **log-intel** host (e.g. `192.168.101.115`) and syslog port (default **5516** if using Docker compose port map).
+4. Complete the wizard and click **Install** (elevates to Administrator).
+5. The service is registered, configuration is saved, and forwarding starts.
 
 To change settings later, run `SyslogPusher.exe` again. Use **Restart service** after saving (Administrator).
 
@@ -66,7 +67,7 @@ When enabled for a directory:
 
 Use this for folders with large historical application logs (e.g. `Pri.log`) where the central collector should not receive a burst of old events after every service restart.
 
-**Pair with syslogb:** on the syslog collector, syslogb includes a built-in **SMS Pri logs** timestamp parser for `Pri.log` so sort order and time-range filtering use the embedded event date in the message, not the rsyslog receive prefix. See the [syslogb README](https://github.com/kkristinsson/syslogb#timestamp-parsers-remote--syslogpusher-logs).
+**Pair with log-intel:** the file logs UI includes a built-in **SMS Pri logs** timestamp parser for `Pri.log` so sort order and time-range filtering use the embedded event date in the message, not the rsyslog receive prefix. See **Help** on http://host:9088/.
 
 Windows **event logs** use a separate startup grace window (default 5 minutes) to ignore events older than service start minus grace.
 
@@ -77,6 +78,8 @@ src/
   SyslogPusher.Core/      Shared config, collectors, syslog client
   SyslogPusher.Service/   Windows service host
   SyslogPusher.UI/        WPF wizard + configuration app
+dist/
+  SyslogPusher.exe        Pre-built release (win-x64, self-contained)
 ```
 
 ## License
