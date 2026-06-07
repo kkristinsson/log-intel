@@ -45,13 +45,16 @@ hub_bp = Blueprint(
 
 
 def _render_dashboard(active_tab: str = "overview"):
-    from log_intel.feature_visibility import compute_ui_features
+    from log_intel.feature_visibility import compute_ui_features, ui_features_payload
     from log_intel.main import get_hub
 
+    hub = get_hub()
+    payload = ui_features_payload(hub)
     return render_template(
         "dashboard.html",
         active_tab=active_tab,
-        ui_features=compute_ui_features(get_hub()),
+        ui_features=payload["ui"],
+        ui_features_tagline=payload.get("tagline", ""),
     )
 
 
@@ -253,6 +256,31 @@ def hub_stream():
                     pass
 
     return Response(gen(), mimetype="text/event-stream")
+
+
+@hub_bp.route("/api/v1/events/<int:event_id>/related")
+def hub_event_related(event_id: int):
+    hub = _require_hub()
+    limit = int(request.args.get("limit", 30))
+    events = hub.store.related_events(event_id, limit=limit)
+    return jsonify({"event_id": event_id, "events": [e.to_dict() for e in events], "count": len(events)})
+
+
+@hub_bp.route("/api/v1/mist/analyze", methods=["POST"])
+def hub_mist_analyze():
+    denied = _require_admin()
+    if denied:
+        return denied
+    hub = _require_hub()
+    body = request.get_json(force=True, silent=True) or {}
+    hours = float(body.get("hours", 24))
+    since = time.time() - hours * 3600
+    events = hub.store.list_events(since=since, source_type="mist", limit=200)
+    ids = [e.id for e in events if e.id]
+    if not ids:
+        return jsonify({"error": "no mist events in window"}), 404
+    job_id = hub.analysis_worker.run_on_demand(ids)
+    return jsonify({"job_id": job_id, "event_count": len(ids)})
 
 
 @hub_bp.route("/api/v1/firewall")

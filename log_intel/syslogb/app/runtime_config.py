@@ -182,6 +182,8 @@ def refresh_config_module(store: AppStore) -> None:
     config.LDAP_GROUP_SEARCH_BASE = values["LDAP_GROUP_SEARCH_BASE"]
     config.LDAP_REQUIRED_GROUP = values["LDAP_REQUIRED_GROUP"]
     config.LDAP_REQUIRED_GROUP_CN = values["LDAP_REQUIRED_GROUP_CN"]
+    config.LDAP_ADMIN_GROUP = values.get("LDAP_ADMIN_GROUP", "")
+    config.LDAP_ADMIN_GROUP_CN = values.get("LDAP_ADMIN_GROUP_CN", "")
     config.LDAP_MEMBER_OF_ATTR = values["LDAP_MEMBER_OF_ATTR"]
     config.SMTP_HOST = values.get("SMTP_HOST", "")
     config.SMTP_PORT = _coerce(values.get("SMTP_PORT", "587"), "int")

@@ -112,4 +112,15 @@ def compute_ui_features(hub: HubState | None = None) -> dict[str, bool]:
 
 
 def ui_features_payload(hub: HubState | None = None) -> dict[str, Any]:
-    return {"ui": compute_ui_features(hub)}
+    ui = compute_ui_features(hub)
+    parts = ["Live syslog", "Search"]
+    if ui.get("hub_firewall"):
+        parts.append("Firewall")
+    if ui.get("hub_mist"):
+        parts.append("Mist")
+    if ui.get("hub_geo"):
+        parts.append("Geo map")
+    parts.extend(["Alerts"])
+    if ui.get("hub_analysis"):
+        parts.append("Analysis")
+    return {"ui": ui, "tagline": ", ".join(parts)}

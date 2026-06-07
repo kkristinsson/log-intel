@@ -21,6 +21,7 @@ AuthMethod = Literal["ldap", "local"]
 class AuthUser(UserMixin):
     username: str
     method: AuthMethod
+    is_admin: bool = False
 
     @property
     def id(self) -> str:
@@ -51,7 +52,7 @@ def authenticate(username: str, password: str) -> AuthUser | None:
             return ldap_user
 
     if _local_authenticate(username, password):
-        return AuthUser(username=username, method="local")
+        return AuthUser(username=username, method="local", is_admin=True)
 
     return None
 
@@ -123,8 +124,9 @@ def _ldap_authenticate(username: str, password: str) -> AuthUser | None:
             conn.unbind()
             return None
 
+        is_admin = _ldap_is_admin(conn, resolved_dn or bind_user, username, escape_filter_chars)
         conn.unbind()
-        return AuthUser(username=username, method="ldap")
+        return AuthUser(username=username, method="ldap", is_admin=is_admin)
     except LDAPException as e:
         logger.warning("LDAP error for %s: %s", username, e)
         return None
@@ -176,10 +178,46 @@ def _resolve_ldap_user_identity(server, username: str, escape_filter_chars):
 
 
 def _ldap_group_allowed(conn, user_dn: str, username: str, escape_filter_chars) -> bool:
-    required_dn = config.LDAP_REQUIRED_GROUP.strip()
-    required_cn = config.LDAP_REQUIRED_GROUP_CN.strip()
+    return _ldap_group_allowed_for(
+        conn,
+        user_dn,
+        username,
+        escape_filter_chars,
+        config.LDAP_REQUIRED_GROUP.strip(),
+        config.LDAP_REQUIRED_GROUP_CN.strip(),
+        default_if_unconfigured=True,
+    )
+
+
+def _ldap_is_admin(conn, user_dn: str, username: str, escape_filter_chars) -> bool:
+    admins = os.environ.get("SETTINGS_ADMIN_USERS", "").strip()
+    if admins:
+        allowed = {u.strip() for u in admins.split(",") if u.strip()}
+        if username in allowed:
+            return True
+    return _ldap_group_allowed_for(
+        conn,
+        user_dn,
+        username,
+        escape_filter_chars,
+        config.LDAP_ADMIN_GROUP.strip(),
+        config.LDAP_ADMIN_GROUP_CN.strip(),
+        default_if_unconfigured=False,
+    )
+
+
+def _ldap_group_allowed_for(
+    conn,
+    user_dn: str,
+    username: str,
+    escape_filter_chars,
+    required_dn: str,
+    required_cn: str,
+    *,
+    default_if_unconfigured: bool,
+) -> bool:
     if not required_dn and not required_cn:
-        return True
+        return default_if_unconfigured
 
     member_of = _ldap_member_of(conn, user_dn, username, escape_filter_chars)
     if required_dn:
@@ -191,7 +229,6 @@ def _ldap_group_allowed(conn, user_dn: str, username: str, escape_filter_chars) 
         needle = f"cn={required_cn.lower()},"
         if any(g.lower().startswith(needle) or f",cn={required_cn.lower()}," in g.lower() for g in member_of):
             return True
-        # Active Directory groups are sometimes returned as CN=Group,...
         if any(g.lower().startswith(f"cn={required_cn.lower()}") for g in member_of):
             return True
 
@@ -204,7 +241,7 @@ def _ldap_group_allowed(conn, user_dn: str, username: str, escape_filter_chars) 
             if conn.entries:
                 return True
 
-    return not (required_dn or required_cn)
+    return False
 
 
 def _ldap_member_of(conn, user_dn: str, username: str, escape_filter_chars) -> list[str]:

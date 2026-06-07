@@ -134,6 +134,8 @@ def build_settings(store: AppStore | None = None) -> Settings:
             mist_poll_interval_sec=_coerce_from_registry(store, "MIST_POLL_INTERVAL_SEC", "int", 300),
             mist_poll_limit=_coerce_from_registry(store, "MIST_POLL_LIMIT", "int", 100),
             mist_lookback_hours=_coerce_from_registry(store, "MIST_LOOKBACK_HOURS", "float", 24.0),
+            reserve_events_mist=_coerce_from_registry(store, "LOG_INTEL_RESERVE_EVENTS_MIST", "int", 1000),
+            reserve_events_palo=_coerce_from_registry(store, "LOG_INTEL_RESERVE_EVENTS_PALO", "int", 0),
         )
 
     from log_intel.config import _settings_from_env

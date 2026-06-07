@@ -168,15 +168,36 @@ class EventStore(LogStoreMixin):
         if self._max_events <= 0:
             return
         cur = self._conn.execute("SELECT COUNT(*) FROM events")
-        count = cur.fetchone()[0]
-        if count > self._max_events:
-            excess = count - self._max_events
-            self._conn.execute(
-                """DELETE FROM events WHERE id IN (
-                    SELECT id FROM events ORDER BY id ASC LIMIT ?
-                )""",
-                (excess,),
-            )
+        count = int(cur.fetchone()[0])
+        if count <= self._max_events:
+            return
+        excess = count - self._max_events
+        try:
+            from log_intel.config import get_settings
+
+            settings = get_settings()
+            floors = {
+                "mist": max(0, int(settings.reserve_events_mist)),
+                "palo_alto": max(0, int(settings.reserve_events_palo)),
+            }
+        except Exception:
+            floors = {}
+
+        cur = self._conn.execute("SELECT id, source_type FROM events ORDER BY id ASC")
+        deleted = 0
+        for eid, source_type in cur.fetchall():
+            if deleted >= excess:
+                break
+            floor = floors.get(source_type or "", 0)
+            if floor > 0:
+                row = self._conn.execute(
+                    "SELECT COUNT(*) FROM events WHERE source_type = ?",
+                    (source_type,),
+                ).fetchone()
+                if row and int(row[0]) <= floor:
+                    continue
+            self._conn.execute("DELETE FROM events WHERE id = ?", (eid,))
+            deleted += 1
 
     def get_event(self, event_id: int) -> LogEvent | None:
         with self._lock:
@@ -321,6 +342,41 @@ class EventStore(LogStoreMixin):
                 (source_type,),
             )
             return int(cur.fetchone()[0])
+
+    def related_events(self, event_id: int, *, limit: int = 30) -> list[LogEvent]:
+        ev = self.get_event(event_id)
+        if ev is None:
+            return []
+        needles: list[str] = []
+        for val in (ev.remote_ip, ev.src_ip, ev.dst_ip, ev.syslog_host):
+            if val and val not in needles:
+                needles.append(val)
+        import re
+
+        for mac in re.findall(r"([0-9a-fA-F]{2}(?::[0-9a-fA-F]{2}){5})", ev.message or ""):
+            if mac not in needles:
+                needles.append(mac)
+        if not needles:
+            return self.list_events(
+                since=ev.received_at - 3600,
+                until=ev.received_at + 3600,
+                source_type=ev.source_type,
+                limit=limit,
+            )
+        where = ["id != ?"]
+        params: list[Any] = [event_id]
+        like_parts: list[str] = []
+        for n in needles[:8]:
+            like_parts.append("(message LIKE ? OR raw LIKE ? OR remote_ip = ? OR src_ip = ? OR dst_ip = ?)")
+            pat = f"%{n}%"
+            params.extend([pat, pat, n, n, n])
+        where.append("(" + " OR ".join(like_parts) + ")")
+        sql = f"{EVENT_SELECT} WHERE {' AND '.join(where)} ORDER BY received_at DESC LIMIT ?"
+        params.append(limit)
+        with self._lock:
+            cur = self._conn.execute(sql, params)
+            rows = cur.fetchall()
+        return [LogEvent.from_row(r) for r in rows]
 
     def unanalyzed_events(self, limit: int = 10) -> list[LogEvent]:
         with self._lock:

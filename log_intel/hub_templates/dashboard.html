@@ -13,7 +13,7 @@
       <h1><a href="/" class="hub-brand-link">← File logs</a></h1>
       <a href="/" class="btn hub-file-link">File logs</a>
     </div>
-    <p class="tagline">Live syslog, search, firewall, geo map, alerts</p>
+    <p id="hub-tagline" class="tagline">{{ ui_features_tagline | default('Live syslog, search, alerts') }}</p>
     <nav id="tabs">
       <button type="button" data-tab="overview" class="{{ 'active' if active_tab == 'overview' else '' }}">Overview</button>
       <button type="button" data-tab="live" class="{{ 'active' if active_tab == 'live' else '' }}">Live</button>
@@ -29,7 +29,7 @@
   <main>
     <section id="panel-overview" class="panel {{ 'active' if active_tab == 'overview' else '' }}">
       <div id="health-cards" class="cards"></div>
-      <h2>Recent critical / error events</h2>
+      <h2>Recent hub events</h2>
       <div id="overview-events" class="log-list"></div>
     </section>
 
@@ -37,9 +37,9 @@
       <div class="toolbar">
         <label>Min importance
           <select id="live-importance">
-            <option value="info">info+</option>
+            <option value="info" selected>info+</option>
             <option value="warning">warning+</option>
-            <option value="error" selected>error+</option>
+            <option value="error">error+</option>
             <option value="critical">critical</option>
           </select>
         </label>
@@ -55,6 +55,15 @@
           <select id="search-mode">
             <option value="text">text</option>
             <option value="regex">regex</option>
+          </select>
+        </label>
+        <label>Source
+          <select id="search-source-type">
+            <option value="">all hub</option>
+            <option value="mist">Juniper Mist</option>
+            <option value="palo_alto">Palo Alto</option>
+            <option value="windows">Windows</option>
+            <option value="generic">generic syslog</option>
           </select>
         </label>
         <label>Hours <input type="number" id="search-hours" value="168" min="1" max="720" style="width:4em"></label>
@@ -85,8 +94,10 @@
       <div class="toolbar">
         <label>Hours <input type="number" id="mist-hours" value="168" min="1" max="720"></label>
         <button type="button" id="mist-refresh">Refresh</button>
+        <button type="button" id="mist-analyze" data-ui-feature="hub_analysis" class="{% if not ui_features.get('hub_analysis') %}hidden{% endif %}">Analyze window (LLM)</button>
       </div>
       <p id="mist-status" class="hint"></p>
+      <div id="mist-related" class="log-list hidden"></div>
       <div id="mist-table" class="log-list"></div>
     </section>
 
@@ -116,6 +127,13 @@
         <input type="text" id="alert-rule-query" placeholder="Query" required size="24">
         <select id="alert-rule-mode"><option value="text">text</option><option value="regex">regex</option></select>
         <select id="alert-rule-scope"><option value="all">all lines</option><option value="failures_only">failures only</option></select>
+        <select id="alert-rule-source-type" title="Hub events only">
+          <option value="">any hub source</option>
+          <option value="mist">Juniper Mist</option>
+          <option value="palo_alto">Palo Alto</option>
+          <option value="windows">Windows</option>
+          <option value="generic">generic</option>
+        </select>
         <input type="text" id="alert-rule-webhook" placeholder="Webhook URL" size="28">
         <label><input type="checkbox" id="alert-rule-enabled" checked> enabled</label>
         <button type="submit">Save rule</button>
@@ -164,6 +182,7 @@
   <script src="{{ url_for('static', filename='api.js') }}"></script>
   <script>window.__HUB_ACTIVE_TAB__ = "{{ active_tab }}";</script>
   <script>window.__HUB_UI_FEATURES__ = {{ ui_features | tojson }};</script>
+  <script>window.__HUB_TAGLINE__ = {{ ui_features_tagline | tojson }};</script>
   <script src="{{ url_for('hub.static', filename='app.js') }}"></script>
 </body>
 </html>

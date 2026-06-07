@@ -23,7 +23,7 @@ from log_intel.syslogb.app.llm_client import (
     llm_enabled,
 )
 from log_intel.syslogb.app.search import search_highlight_terms, search_logs
-from log_intel.syslogb.app.admin_auth import can_access_settings, is_settings_admin, is_setup_complete
+from log_intel.syslogb.app.admin_auth import can_access_settings, is_read_only_user, is_settings_admin, require_admin_json, is_setup_complete
 from log_intel.syslogb.app.columnizers import enrich_event, resolve_columnizer
 from log_intel.syslogb.app.export import collect_file_events, collect_search_events, stream_csv, stream_jsonl, stream_txt
 from log_intel.syslogb.app.store import AppStore
@@ -106,6 +106,8 @@ def _init_auth(app: Flask, store: AppStore) -> None:
 
     @app.before_request
     def enforce_auth():
+        if request.path in ("/health", "/metrics", "/api/health", "/api/v1/health"):
+            return None
         if not auth_required():
             return None
         if not is_setup_complete(store):
@@ -226,6 +228,8 @@ def create_app(
             "auth_enabled": auth_required(),
             "setup_complete": is_setup_complete(store),
             "llm_enabled": llm_enabled(),
+            "is_admin": is_settings_admin(),
+            "is_read_only": is_read_only_user(),
             "ui_features": ui_features,
         }
 
@@ -245,6 +249,7 @@ def create_app(
             if user:
                 login_user(user)
                 session["auth_method"] = user.method
+                session["is_admin"] = bool(getattr(user, "is_admin", False))
                 dest = safe_redirect_target(request.args.get("next"))
                 return redirect(dest)
             error = "Invalid username or password."
@@ -260,6 +265,7 @@ def create_app(
         if current_user.is_authenticated:
             logout_user()
             session.pop("auth_method", None)
+            session.pop("is_admin", None)
         return redirect(url_for("login" if auth_required() else "index"))
 
     @app.get("/")
@@ -315,6 +321,9 @@ def create_app(
 
     @app.put("/api/analysis-schedules")
     def api_analysis_schedules_upsert():
+        denied = require_admin_json()
+        if denied:
+            return denied
         if not llm_enabled():
             return jsonify({"error": "LLM features are disabled"}), 503
         body = request.get_json(silent=True) or {}
@@ -341,6 +350,9 @@ def create_app(
 
     @app.delete("/api/analysis-schedules/<schedule_id>")
     def api_analysis_schedules_delete(schedule_id: str):
+        denied = require_admin_json()
+        if denied:
+            return denied
         if not llm_enabled():
             return jsonify({"error": "LLM features are disabled"}), 503
         if not store.delete_analysis_schedule(schedule_id):
@@ -670,6 +682,9 @@ def create_app(
 
     @app.post("/api/saved-searches")
     def api_saved_searches_upsert():
+        denied = require_admin_json()
+        if denied:
+            return denied
         body = request.get_json(silent=True) or {}
         name = str(body.get("name", "")).strip()
         query = str(body.get("query", "")).strip()
@@ -692,12 +707,18 @@ def create_app(
 
     @app.delete("/api/saved-searches/<search_id>")
     def api_saved_searches_delete(search_id: str):
+        denied = require_admin_json()
+        if denied:
+            return denied
         if store.delete_saved_search(search_id):
             return jsonify({"ok": True})
         return jsonify({"error": "not found"}), 404
 
     @app.post("/api/explain")
     def api_explain():
+        denied = require_admin_json()
+        if denied:
+            return denied
         if not llm_enabled():
             return jsonify({"error": "LLM features are disabled"}), 503
         body = request.get_json(silent=True) or {}
@@ -721,6 +742,9 @@ def create_app(
 
     @app.post("/api/analyze")
     def api_analyze():
+        denied = require_admin_json()
+        if denied:
+            return denied
         if not llm_enabled():
             return jsonify({"error": "LLM features are disabled"}), 503
         body = request.get_json(silent=True) or {}
@@ -762,6 +786,9 @@ def create_app(
 
     @app.delete("/api/analyze/<job_id>")
     def api_analyze_cancel(job_id: str):
+        denied = require_admin_json()
+        if denied:
+            return denied
         if not llm_enabled():
             return jsonify({"error": "LLM features are disabled"}), 503
         if not store.cancel_job(job_id):
@@ -788,7 +815,26 @@ def create_app(
 
     @app.get("/api/setup/status")
     def api_setup_status():
-        return jsonify({"setup_complete": is_setup_complete(store)})
+        from log_intel.main import get_hub
+        from log_intel.setup_checklist import compute_setup_checklist
+
+        items = compute_setup_checklist(get_hub())
+        return jsonify(
+            {
+                "setup_complete": is_setup_complete(store),
+                "checklist": items,
+                "done": sum(1 for i in items if i["done"]),
+                "total": len(items),
+            }
+        )
+
+    @app.get("/api/setup/checklist")
+    def api_setup_checklist():
+        from log_intel.main import get_hub
+        from log_intel.setup_checklist import compute_setup_checklist
+
+        items = compute_setup_checklist(get_hub())
+        return jsonify({"items": items, "done": sum(1 for i in items if i["done"]), "total": len(items)})
 
     @app.post("/api/setup/skip")
     def api_setup_skip():

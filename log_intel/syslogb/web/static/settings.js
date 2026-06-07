@@ -411,6 +411,25 @@
 
   if (setupMode) {
     document.querySelectorAll(".settings-advanced").forEach((el) => { el.hidden = true; });
+    loadSetupChecklist();
+  }
+
+  async function loadSetupChecklist() {
+    const list = document.getElementById("setup-checklist");
+    if (!list) return;
+    try {
+      const r = await fetch("/api/setup/checklist");
+      const data = await r.json();
+      list.innerHTML = "";
+      for (const item of data.items || []) {
+        const li = document.createElement("li");
+        li.className = item.done ? "done" : "pending";
+        li.textContent = `${item.done ? "✓" : "○"} ${item.label}${item.hint ? ` — ${item.hint}` : ""}`;
+        list.appendChild(li);
+      }
+    } catch (_) {
+      /* ignore */
+    }
   }
 
   loadSettings().catch((e) => { statusEl.textContent = String(e.message || e); });

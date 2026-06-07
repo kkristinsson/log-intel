@@ -12,6 +12,11 @@ function renderLine(container, item, cls = "") {
   const div = document.createElement("div");
   const sev = item.llm_severity || item.severity;
   div.className = `log-line ${cls} ${item.importance || ""} ${sev ? `sev-${sev}` : ""}`;
+  if (item.id) {
+    div.dataset.eventId = String(item.id);
+    div.title = "Click for related hub events";
+    div.style.cursor = "pointer";
+  }
   const meta = document.createElement("div");
   meta.className = "meta";
   const parts = [
@@ -33,10 +38,22 @@ function renderLine(container, item, cls = "") {
   }
 }
 
+async function showRelatedEvents(eventId, targetBox) {
+  if (!eventId || !targetBox) return;
+  const r = await fetch(`/api/v1/events/${eventId}/related?limit=20`);
+  const data = await r.json();
+  targetBox.classList.remove("hidden");
+  targetBox.innerHTML = "<h3>Related events</h3>";
+  for (const ev of data.events || []) {
+    renderLine(targetBox, ev);
+  }
+}
+
 async function loadHealth() {
   const r = await fetch("/health");
   const data = await r.json();
   if (data.ui) applyUiFeatures(data.ui);
+  updateTagline(data.ui, data.tagline);
   const cards = $("#health-cards");
   cards.innerHTML = "";
   const ui = data.ui || window.__HUB_UI_FEATURES__ || {};
@@ -66,6 +83,28 @@ async function loadHealth() {
   if (ui.hub_health_journal && journalOk !== undefined) {
     add("systemd journal", journalOk ? "OK" : "Off", !!journalOk);
   }
+  const ingest = data.adapters?.ingest || {};
+  const drops = (ingest.queue_drops || 0) + (ingest.parse_drops || 0);
+  if (drops > 0) {
+    add("Ingest drops", drops, false);
+  }
+}
+
+function updateTagline(ui, tagline) {
+  const el = document.getElementById("hub-tagline");
+  if (!el) return;
+  if (tagline) {
+    el.textContent = tagline;
+    return;
+  }
+  if (!ui) return;
+  const parts = ["Live syslog", "Search"];
+  if (ui.hub_firewall) parts.push("Firewall");
+  if (ui.hub_mist) parts.push("Mist");
+  if (ui.hub_geo) parts.push("Geo map");
+  parts.push("Alerts");
+  if (ui.hub_analysis) parts.push("Analysis");
+  el.textContent = parts.join(", ");
 }
 
 function applyUiFeatures(ui) {
@@ -75,6 +114,7 @@ function applyUiFeatures(ui) {
     const key = el.dataset.uiFeature;
     el.classList.toggle("hidden", !ui[key]);
   });
+  updateTagline(ui, window.__HUB_TAGLINE__);
   const activeTabBtn = document.querySelector("#tabs button.active");
   if (activeTabBtn?.classList.contains("hidden")) {
     document.querySelector('#tabs button[data-tab="overview"]')?.click();
@@ -120,10 +160,12 @@ async function doSearch(e) {
   const loggy = $("#include-loggy").checked;
   const mode = $("#search-mode").value;
   const hours = $("#search-hours").value;
-  const r = await fetch(
+  const sourceType = $("#search-source-type")?.value || "";
+  let url =
     `/api/v1/search?q=${encodeURIComponent(q)}&mode=${mode}&hours=${hours}` +
-    `&include_syslogb=${syslogb}&include_loggy=${loggy}`
-  );
+    `&include_syslogb=${syslogb}&include_loggy=${loggy}`;
+  if (sourceType) url += `&source_type=${encodeURIComponent(sourceType)}`;
+  const r = await fetch(url);
   const data = await r.json();
   const meta = $("#search-meta");
   if (meta) {
@@ -177,6 +219,22 @@ async function loadMist() {
   }
 }
 
+async function analyzeMistWindow() {
+  const hours = $("#mist-hours").value;
+  const out = $("#mist-status");
+  const r = await fetch("/api/v1/mist/analyze", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ hours: Number(hours) || 24 }),
+  });
+  const data = await r.json();
+  if (!r.ok) {
+    if (out) out.textContent = data.error || "Analyze failed";
+    return;
+  }
+  if (out) out.textContent = `LLM job ${data.job_id} started for ${data.event_count} Mist event(s)`;
+}
+
 let map, mapLayer;
 function initMap() {
   if (map) return;
@@ -213,7 +271,7 @@ async function loadAlertRules() {
   for (const rule of data.rules || []) {
     const div = document.createElement("div");
     div.className = "log-line";
-    div.innerHTML = `<div class="meta">${rule.name} · ${rule.mode} · ${rule.scope} · ${rule.enabled ? "on" : "off"}</div>` +
+    div.innerHTML = `<div class="meta">${rule.name} · ${rule.mode} · ${rule.scope}${rule.source_type ? ` · ${rule.source_type}` : ""} · ${rule.enabled ? "on" : "off"}</div>` +
       `<div>${rule.query}</div>`;
     box.appendChild(div);
   }
@@ -227,6 +285,7 @@ async function saveAlertRule(e) {
     query: $("#alert-rule-query").value.trim(),
     mode: $("#alert-rule-mode").value,
     scope: $("#alert-rule-scope").value,
+    source_type: $("#alert-rule-source-type")?.value || null,
     webhook_url: $("#alert-rule-webhook").value.trim() || null,
     enabled: $("#alert-rule-enabled").checked,
   };
@@ -381,7 +440,19 @@ if (syslogbLiveCb) syslogbLiveCb.addEventListener("change", startLive);
 $("#search-form").addEventListener("submit", doSearch);
 $("#fw-refresh").addEventListener("click", loadFirewall);
 $("#mist-refresh")?.addEventListener("click", loadMist);
+$("#mist-analyze")?.addEventListener("click", analyzeMistWindow);
 $("#geo-refresh").addEventListener("click", loadGeo);
+
+document.getElementById("mist-table")?.addEventListener("click", (e) => {
+  const line = e.target.closest(".log-line[data-event-id]");
+  if (!line) return;
+  showRelatedEvents(line.dataset.eventId, document.getElementById("mist-related"));
+});
+document.getElementById("overview-events")?.addEventListener("click", (e) => {
+  const line = e.target.closest(".log-line[data-event-id]");
+  if (!line) return;
+  showRelatedEvents(line.dataset.eventId, document.getElementById("overview-events"));
+});
 $("#analyze-form")?.addEventListener("submit", runAnalyze);
 $("#alert-rule-form")?.addEventListener("submit", saveAlertRule);
 $("#alert-rules-refresh")?.addEventListener("click", loadAlertRules);

@@ -4,13 +4,13 @@
 
 # log-intel — Unified Log Intelligence
 
-Single app combining **syslogb** (file logs, search, LLM/RAG, alerts) and a **network hub** (syslog ingest, Palo Alto parsing, geo flows), plus **Syslog Pusher** (Windows client) in the same repo.
+Single app combining **file log tail/search/LLM** and a **network hub** (syslog ingest, Palo Alto parsing, geo flows, Juniper Mist), plus **Syslog Pusher** (Windows client) in the same repo.
 
 Replaces standalone **syslogb**, **loggy**, **netsyslog**, and **syslogpusher**. See [DEPRECATION.md](DEPRECATION.md).
 
 | Component | Where |
 |-----------|--------|
-| File logs (syslogb) | http://host:9088/ |
+| File logs | http://host:9088/ |
 | Network hub | http://host:9088/hub |
 | Syslog ingest (Linux hub) | UDP/TCP **514** (or remapped host port, e.g. **5516**) |
 | Windows client | [`syslog-pusher/`](syslog-pusher/) — `dist/SyslogPusher.exe` |
@@ -137,7 +137,16 @@ BRAND_LOGO=branding/syslogb.jpg     # under web/static/
 OLLAMA_BASE_URL=http://127.0.0.1:11434
 LOG_INTEL_LLM_ENABLED=1             # hub on-demand LLM (/hub/analysis)
 LOG_INTEL_ANALYSIS_AUTO=0           # set 1 only if you want hourly background batches
+LOG_INTEL_RESERVE_EVENTS_MIST=1000  # minimum Mist events kept when pruning
+LOG_INTEL_RESERVE_EVENTS_PALO=0     # optional Palo Alto retention floor
+LDAP_ADMIN_GROUP=cn=log-intel-admins,ou=Groups,dc=example,dc=com  # LDAP admins (optional)
 ```
+
+**Roles:** When auth is enabled, LDAP users in `LDAP_ADMIN_GROUP` (or `LDAP_ADMIN_GROUP_CN`) get **Admin** — analyze, alert edits, settings writes. Everyone else is **Read-only** (search, tail, hub views). Local bootstrap user is always admin.
+
+**Ops:** `./scripts/backup-data.sh` backs up SQLite + GeoIP. Import `config/grafana/log-intel-dashboard.json` for starter panels. `/health` and `/metrics` skip auth for probes.
+
+See [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) for tests and commit workflow.
 
 Migrating from syslogb? Run:
 
@@ -244,6 +253,7 @@ pytest -q
 | `scripts/install-ollama-embed.sh` | Local Ollama on :11435 for RAG (auto-run by install.sh) |
 | `scripts/sync-syslogb-settings.py` | Merge syslogb `analyses.db` settings into log-intel |
 | `scripts/migration-status.sh` | Check migration / container health |
+| `scripts/backup-data.sh` | Timestamped backup of `events.sqlite`, `analyses.db`, GeoIP |
 
 ## Compare to syslogb install
 

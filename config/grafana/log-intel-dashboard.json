@@ -1,0 +1,22 @@
+{
+  "title": "log-intel overview",
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Hub events stored",
+      "targets": [{ "expr": "log_intel_events_stored", "legendFormat": "events" }]
+    },
+    {
+      "type": "graph",
+      "title": "Ingest rate",
+      "targets": [{ "expr": "rate(log_intel_ingest_total[5m])", "legendFormat": "{{transport}}" }]
+    },
+    {
+      "type": "graph",
+      "title": "Alerts fired",
+      "targets": [{ "expr": "rate(log_intel_alerts_fired_total[5m])", "legendFormat": "{{origin}}" }]
+    }
+  ],
+  "schemaVersion": 38,
+  "version": 1
+}

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 
+from flask import session
 from flask_login import current_user
 
 from log_intel.syslogb.app import config
@@ -26,6 +27,8 @@ def is_settings_admin() -> bool:
         return True
     if not current_user.is_authenticated:
         return False
+    if session.get("is_admin"):
+        return True
     admins = os.environ.get("SETTINGS_ADMIN_USERS", "").strip()
     if admins:
         allowed = {u.strip() for u in admins.split(",") if u.strip()}
@@ -33,4 +36,19 @@ def is_settings_admin() -> bool:
     local = config.LOCAL_AUTH_USERNAME.strip()
     if local and current_user.username == local:
         return True
-    return current_user.method == "local" and bool(local)
+    return getattr(current_user, "is_admin", False)
+
+
+def is_read_only_user() -> bool:
+    if not config.AUTH_ENABLED:
+        return False
+    return current_user.is_authenticated and not is_settings_admin()
+
+
+def require_admin_json():
+    """Return a Flask JSON 403 response if the current user may not mutate state."""
+    from flask import jsonify
+
+    if is_settings_admin():
+        return None
+    return jsonify({"error": "admin required"}), 403

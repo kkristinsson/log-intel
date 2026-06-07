@@ -19,7 +19,7 @@
     {% endif %}
     <p id="sidebar-groups-hint" class="hint sidebar-hint hidden">Groups start collapsed — click to expand, double-click to search that folder.</p>
     <ul id="file-list" class="file-list"></ul>
-    {% if llm_enabled %}
+    {% if llm_enabled and is_admin %}
     <button
       id="analyze-btn"
       class="btn primary analyze-trigger"
@@ -53,8 +53,10 @@
         <select id="saved-search-select" title="Saved searches">
           <option value="">Saved searches…</option>
         </select>
+        {% if is_admin %}
         <button id="saved-search-save-btn" class="btn" type="button" title="Save current search">Save</button>
         <button id="saved-search-delete-btn" class="btn" type="button" hidden title="Delete saved search">Delete</button>
+        {% endif %}
         <input id="search-input" type="search" placeholder="Search: terms, AND/OR/NOT, (parentheses), &quot;phrases&quot;…" autocomplete="off">
         <select id="search-scope" title="Search scope">
           <option value="all">All directories</option>
@@ -109,7 +111,7 @@
       <button id="export-btn" class="btn" type="button">Download</button>
       <span id="view-label" class="hint">All files</span>
       <span id="stream-status" class="hint">Connecting…</span>
-      {% if llm_enabled %}
+      {% if llm_enabled and is_admin %}
       <button
         id="analyze-btn-toolbar"
         class="btn primary analyze-trigger analyze-trigger-toolbar"
@@ -243,7 +245,7 @@
         <ul>
           <li>Results respect the toolbar <strong>Sort</strong> order (newest on top or bottom).</li>
           <li><strong>Click</strong> a line to select it for export (multi-select supported).</li>
-          {% if llm_enabled %}
+          {% if llm_enabled and is_admin %}
           <li><strong>Double-click</strong> a line in a log file view to explain it with the LLM.</li>
           {% endif %}
           <li><strong>Double-click</strong> a search result to jump to that file and line in the file view (use <strong>Load older</strong> if the line is outside the current page).</li>
@@ -252,7 +254,7 @@
         </ul>
       </section>
 
-      {% if llm_enabled %}
+      {% if llm_enabled and is_admin %}
       <section>
         <h4>LLM analysis</h4>
         <ul>
@@ -314,7 +316,7 @@
     <header class="log-modal-header">
       <h3 id="log-modal-title" class="log-modal-title">Full log</h3>
       <div class="log-modal-header-actions">
-        {% if llm_enabled %}
+        {% if llm_enabled and is_admin %}
         <button id="log-modal-explain-btn" class="btn primary" type="button" disabled>Explain this line</button>
         {% endif %}
         <button id="log-modal-close" class="btn log-modal-close" type="button" aria-label="Close">×</button>

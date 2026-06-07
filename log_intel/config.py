@@ -61,6 +61,8 @@ class Settings:
     sqlite_path: str = "./data/events.sqlite"
     max_events: int = 500000
     retention_hours: float = 0.0
+    reserve_events_mist: int = 1000
+    reserve_events_palo: int = 0
     geoip_mmdb_path: str = "./geoip/dbip-city-lite.mmdb"
     ollama_base_url: str = "http://127.0.0.1:11434"
     ollama_model: str = "qwen3.6:27b-q8_0"
@@ -171,6 +173,8 @@ def _settings_from_env() -> Settings:
         sqlite_path=sqlite,
         max_events=_env_int("LOG_INTEL_MAX_EVENTS", 500000),
         retention_hours=_env_float("LOG_INTEL_RETENTION_HOURS", 0.0),
+        reserve_events_mist=_env_int("LOG_INTEL_RESERVE_EVENTS_MIST", 1000),
+        reserve_events_palo=_env_int("LOG_INTEL_RESERVE_EVENTS_PALO", 0),
         geoip_mmdb_path=os.environ.get(
             "LOG_INTEL_GEOIP_MMDB_PATH", "./geoip/dbip-city-lite.mmdb"
         ),
