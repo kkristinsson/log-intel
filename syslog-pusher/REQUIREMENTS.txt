@@ -1,0 +1,43 @@
+Syslog Pusher - System Requirements
+===================================
+
+Supported operating systems
+---------------------------
+- Windows 10 version 1809 (build 17763) or later
+- Windows 11
+- Windows Server 2019 or later
+
+Hardware
+--------
+- x64 (64-bit) processor
+- 50 MB disk space for the application (plus log volume from watched files)
+- Network connectivity to the configured syslog server (UDP or TCP)
+
+Runtime (target machines)
+-------------------------
+The published application (dist\SyslogPusher.exe) is a single self-contained
+executable that bundles the .NET 8 runtime (win-x64). Target machines do NOT
+need a separate .NET install.
+
+Build machine (only needed to compile from source)
+--------------------------------------------------
+  .NET 8 SDK (8.0.400 or newer)
+  https://dotnet.microsoft.com/download/dotnet/8.0
+
+Privileges
+----------
+- First-time installation and service install: Administrator
+- Changing configuration after install: standard user (writes to ProgramData)
+- Restarting the Windows service from the UI: Administrator
+
+Firewall
+--------
+Allow outbound traffic from the service host to your syslog collector on the
+configured port (default UDP/TCP 514).
+
+Configuration storage
+---------------------
+Settings are stored at:
+  %ProgramData%\SyslogPusher\config.json
+
+This file is managed only through the Syslog Pusher graphical application.

@@ -1,0 +1,29 @@
+<Window x:Class="SyslogPusher.UI.Views.InstallWizardWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:SyslogPusher.UI.Controls"
+        Title="Syslog Pusher Setup — Kristinsson Consulting AB"
+        Height="660" Width="840"
+        MinHeight="540" MinWidth="720"
+        Icon="pack://application:,,,/SyslogPusher.UI;component/Assets/logo.png"
+        Background="{StaticResource SurfaceBrush}"
+        Closing="OnClosing">
+    <DockPanel Margin="16">
+        <controls:BrandFooter DockPanel.Dock="Bottom" Margin="0,12,0,0"/>
+
+        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,8">
+            <Button x:Name="BackButton" Content="Back" Click="OnBack" IsEnabled="False" Style="{StaticResource SecondaryButton}"/>
+            <Button x:Name="NextButton" Content="Next" Click="OnNext" IsDefault="True"/>
+            <Button x:Name="FinishButton" Content="Install" Click="OnFinish" Visibility="Collapsed"/>
+            <Button Content="Cancel" Click="OnCancel" IsCancel="True" Style="{StaticResource SecondaryButton}"/>
+        </StackPanel>
+
+        <controls:BrandHeader DockPanel.Dock="Top"
+                                Subtitle="Setup wizard — install the Syslog Pusher Windows service"/>
+
+        <TextBlock DockPanel.Dock="Top" x:Name="StepTitle" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,6" Foreground="#0F172A"/>
+        <TextBlock DockPanel.Dock="Top" x:Name="StepDescription" TextWrapping="Wrap" Margin="0,0,0,12" Foreground="{StaticResource MutedTextBrush}"/>
+
+        <Frame x:Name="WizardFrame" NavigationUIVisibility="Hidden"/>
+    </DockPanel>
+</Window>

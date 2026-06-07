@@ -1,0 +1,22 @@
+<Page x:Class="SyslogPusher.UI.WizardPages.EventsPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      Title="Events">
+    <DockPanel Margin="8">
+        <StackPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+            <TextBlock TextWrapping="Wrap" Margin="0,0,0,8"
+                       Text="Add one row per Windows event log to watch (for example Application, System, Security)."/>
+            <StackPanel Orientation="Horizontal">
+                <Button Content="Add" Click="OnAdd"/>
+                <Button Content="Remove" Click="OnRemove"/>
+            </StackPanel>
+        </StackPanel>
+        <DataGrid x:Name="Grid" AutoGenerateColumns="False" CanUserAddRows="False">
+            <DataGrid.Columns>
+                <DataGridCheckBoxColumn Header="Enabled" Binding="{Binding Enabled}" Width="70"/>
+                <DataGridTextColumn Header="Log name" Binding="{Binding LogName}" Width="160"/>
+                <DataGridTextColumn Header="Providers (optional)" Binding="{Binding ProvidersDisplay}" Width="*"/>
+            </DataGrid.Columns>
+        </DataGrid>
+    </DockPanel>
+</Page>
