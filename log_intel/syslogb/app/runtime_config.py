@@ -151,6 +151,16 @@ def refresh_config_module(store: AppStore) -> None:
     config.ANALYSIS_HISTORY_KEEP = _coerce(values.get("ANALYSIS_HISTORY_KEEP", "5"), "int")
     config.APP_PUBLIC_URL = (values.get("APP_PUBLIC_URL") or "").rstrip("/")
     config.LOG_SKIP_NAMES = values["LOG_SKIP_NAMES"]
+    config.JOURNAL_ENABLED = _coerce(values.get("JOURNAL_ENABLED", "1"), "bool")
+    config.JOURNAL_DIRECTORY = values.get("JOURNAL_DIRECTORY", "")
+    config.JOURNAL_BOOT_ONLY = _coerce(values.get("JOURNAL_BOOT_ONLY", "0"), "bool")
+    config.JOURNAL_MERGE_SYSTEM = _coerce(values.get("JOURNAL_MERGE_SYSTEM", "0"), "bool")
+    config.JOURNAL_UNITS = values.get("JOURNAL_UNITS", "")
+    config.JOURNAL_PRIORITY = values.get("JOURNAL_PRIORITY", "")
+    config.JOURNAL_MATCH = values.get("JOURNAL_MATCH", "")
+    config.JOURNAL_OUTPUT = values.get("JOURNAL_OUTPUT", "short-iso")
+    config.JOURNAL_PAGE_LINES = _coerce(values.get("JOURNAL_PAGE_LINES", "500"), "int")
+    config.JOURNAL_SEARCH_SINCE = values.get("JOURNAL_SEARCH_SINCE", "24 hours ago")
     config.APP_NAME = values["APP_NAME"]
     from log_intel.syslogb.app.version import __version__ as _default_ver
     config.APP_VERSION = values["APP_VERSION"] or _default_ver

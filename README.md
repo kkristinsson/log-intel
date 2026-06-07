@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="log_intel/syslogb/web/static/branding/syslogb.jpg" alt="log-intel" width="280">
+  <img src="log_intel/syslogb/web/static/branding/log-intel.png" alt="log-intel" width="280">
 </p>
 
 # log-intel — Unified Log Intelligence
@@ -16,7 +16,7 @@ Replaces standalone **syslogb**, **loggy**, and **netsyslog**. See [DEPRECATION.
 
 ## Features
 
-**File logs (`/`)** — multi-directory tail, search, export, LLM analysis, RAG/Chroma, alerts, auth, settings wizard.
+**File logs (`/`)** — multi-directory tail, **systemd journal** (`journalctl`), search, export, LLM analysis, RAG/Chroma, alerts, auth, settings wizard.
 
 **Network hub (`/hub`)** — Palo Alto + Windows syslog ingest, GeoIP, live feed, firewall view, flow map, hub Ollama triage.
 
@@ -92,9 +92,27 @@ cp .env.example .env    # or run ./install.sh first, then docker compose
 docker compose up -d --build
 ```
 
-Default port map: **9088** (HTTP), **5516→514** (syslog). Mounts `/var/log`, `/var/log/remote`, `./data`, `./geoip`.
+Default port map: **9088** (HTTP), **5516→514** (syslog). Mounts `/var/log`, `/var/log/remote`, host **systemd journal**, `./data`, `./geoip`.
 
 Compose loads all settings via `env_file: .env`.
+
+### systemd journal
+
+On any **systemd** host (Ubuntu, Debian, Fedora, RHEL, openSUSE, …), log-intel can tail and search the journal alongside `/var/log` files. Sources appear in the sidebar under **systemd journal**:
+
+- **System journal** — `journal://system`
+- **Current boot** — `journal://boot`
+- Optional per-unit streams from `JOURNAL_UNITS`
+
+Native install: install `systemd` / ensure `journalctl` is on `PATH`, keep `JOURNAL_ENABLED=1` (default). Read access usually requires membership in `systemd-journal` or `adm`:
+
+```bash
+sudo usermod -aG systemd-journal "$USER" && newgrp systemd-journal
+```
+
+Docker: the compose file mounts `/run/log/journal`, `/var/log/journal`, and `/etc/machine-id` read-only. Leave `JOURNAL_DIRECTORY` empty so `journalctl` picks the right store (persistent `/var/log/journal` on most servers). Set `JOURNAL_DIRECTORY=/run/log/journal` only if you use volatile journal storage.
+
+Tune filters in **Settings** or `.env`: `JOURNAL_UNITS`, `JOURNAL_PRIORITY`, `JOURNAL_MATCH`, `JOURNAL_BOOT_ONLY`, `JOURNAL_SEARCH_SINCE`.
 
 ## Configuration
 

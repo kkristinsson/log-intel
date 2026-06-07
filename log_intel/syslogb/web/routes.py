@@ -12,6 +12,8 @@ from flask_login import LoginManager, current_user, login_user, logout_user
 from log_intel.syslogb.app import config
 from log_intel.syslogb.app.analyze_worker import AnalyzeWorker
 from log_intel.syslogb.app.auth import AuthUser, auth_required, authenticate
+from log_intel.syslogb.app.journal_source import is_journal_source
+from log_intel.syslogb.app.journal_reader import journal_meta, read_journal_file_page, read_journal_page
 from log_intel.syslogb.app.file_reader import file_meta, full_log_lines, read_file_page, window_to_since_ts
 from log_intel.syslogb.app.llm_client import (
     chat_model_name,
@@ -281,6 +283,7 @@ def create_app(
 
         ok, msg = health_check()
         dir_ok, dir_msg = check_log_dirs_access(log_dirs())
+        journal = tail_service.journal_status
         return jsonify({
             "version": config.APP_VERSION,
             "auth_enabled": auth_required(),
@@ -293,6 +296,8 @@ def create_app(
             "llm_embed_model": embed_model_name(),
             "log_dir_ok": dir_ok,
             "log_dir_msg": dir_msg,
+            "journal_ok": journal.get("ok", False),
+            "journal_msg": journal.get("message", ""),
         })
 
     @app.get("/api/files")
@@ -365,6 +370,11 @@ def create_app(
             path = resolve_safe_path(path_str)
         except PermissionError as e:
             return jsonify({"error": str(e)}), 403
+        if is_journal_source(path_str):
+            meta = journal_meta(path_str)
+            if meta.get("error"):
+                return jsonify(meta), 404
+            return jsonify(meta)
         meta = file_meta(path)
         if meta.get("error"):
             return jsonify(meta), 404
@@ -387,20 +397,28 @@ def create_app(
             path = resolve_safe_path(path_str)
         except PermissionError as e:
             return jsonify({"error": str(e)}), 403
-        if not path.is_file():
-            return jsonify({"error": f"Not a file: {path}"}), 404
         window = request.args.get("window", "").strip()
         since_ts = window_to_since_ts(window) if direction == "tail" else None
-        page, err = read_file_page(
-            path,
-            direction=direction,
-            before_byte=request.args.get("before_byte", type=int),
-            after_byte=request.args.get("after_byte", type=int),
-            before_line=request.args.get("before_line", type=int),
-            after_line=request.args.get("after_line", type=int),
-            failures_only=failures_only,
-            since_ts=since_ts,
-        )
+        if is_journal_source(path_str):
+            page, err = read_journal_file_page(
+                path_str,
+                direction=direction,
+                failures_only=failures_only,
+                since_ts=since_ts,
+            )
+        else:
+            if not path.is_file():
+                return jsonify({"error": f"Not a file: {path}"}), 404
+            page, err = read_file_page(
+                path,
+                direction=direction,
+                before_byte=request.args.get("before_byte", type=int),
+                after_byte=request.args.get("after_byte", type=int),
+                before_line=request.args.get("before_line", type=int),
+                after_line=request.args.get("after_line", type=int),
+                failures_only=failures_only,
+                since_ts=since_ts,
+            )
         if err:
             return jsonify({"error": err}), 403
         events = filter_events_by_importance(page.get("events", []), importance_min)
@@ -429,10 +447,34 @@ def create_app(
             path = resolve_safe_path(path_str)
         except PermissionError as e:
             return jsonify({"error": str(e)}), 403
-        if not path.is_file():
-            return jsonify({"error": f"Not a file: {path}"}), 404
         window = request.args.get("window", "").strip()
         since_ts = window_to_since_ts(window)
+        if is_journal_source(path_str):
+            page, err = read_journal_file_page(
+                path_str,
+                direction="tail",
+                failures_only=failures_only,
+                since_ts=since_ts,
+            )
+            if err:
+                return jsonify({"error": err, "events": []}), 403
+            events = filter_events_by_importance(page.get("events", []), importance_min)
+            reverse = order != "asc"
+            events.sort(key=lambda e: e["received_at"], reverse=reverse)
+            payload = {
+                "path": path_str,
+                "events": _enrich_events(events, store),
+                "failures_only": failures_only,
+                "importance_min": importance_min,
+                **_paging_fields(page),
+            }
+            if window:
+                payload["window"] = window
+            if since_ts is not None:
+                payload["window_since"] = since_ts
+            return jsonify(payload)
+        if not path.is_file():
+            return jsonify({"error": f"Not a file: {path}"}), 404
         page, err = read_file_page(
             path,
             direction="tail",
@@ -467,6 +509,19 @@ def create_app(
             path = resolve_safe_path(path_str)
         except PermissionError as e:
             return jsonify({"error": str(e)}), 403
+        if is_journal_source(path_str):
+            events, err = read_journal_page(
+                path_str,
+                direction="tail",
+                max_lines=config.JOURNAL_SEARCH_LINES,
+            )
+            if err:
+                return jsonify({"error": err, "events": []}), 403
+            events.sort(key=lambda e: e.get("line_index", 0))
+            return jsonify({
+                "path": path_str,
+                "events": _enrich_events(events, store),
+            })
         if not path.is_file():
             return jsonify({"error": f"Not a file: {path}"}), 404
         events, err = full_log_lines(path)
@@ -601,6 +656,8 @@ def create_app(
             path = resolve_safe_path(path_str)
         except PermissionError as e:
             return jsonify({"error": str(e)}), 403
+        if is_journal_source(path_str):
+            return jsonify({"error": "LLM file analysis is not supported for journal sources yet"}), 400
         if not path.is_file():
             return jsonify({"error": f"Not a file: {path}"}), 404
         job_mode = f"window:{window}" if scope == "window" else "full"

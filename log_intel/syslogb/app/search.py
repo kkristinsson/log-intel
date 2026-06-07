@@ -7,6 +7,13 @@ from typing import Any, Literal
 
 from log_intel.syslogb.app import config
 from log_intel.syslogb.app.file_reader import read_tail
+from log_intel.syslogb.app.journal_source import (
+    is_journal_source,
+    journal_available,
+    list_journal_sources,
+    parse_journal_uri,
+    read_journal_lines,
+)
 from log_intel.syslogb.app.log_dirs import belongs_to_localhost_group, log_dirs
 from log_intel.syslogb.app.parser import parse_timestamp, sort_key
 from log_intel.syslogb.app.query_parser import compile_text_query, line_matches
@@ -82,6 +89,57 @@ def search_file(
     return events
 
 
+def search_journal(
+    uri: str,
+    query: str,
+    mode: SearchMode,
+    *,
+    limit: int | None = None,
+    importance_min: str | None = None,
+) -> list[dict[str, Any]]:
+    if not is_journal_source(uri):
+        return []
+    limit = limit or config.SEARCH_MAX_RESULTS
+    try:
+        spec = parse_journal_uri(uri)
+    except ValueError:
+        return []
+    pattern = _compile_pattern(query, mode)
+    lines, err = read_journal_lines(
+        spec,
+        max_lines=config.JOURNAL_SEARCH_LINES,
+        since=config.JOURNAL_SEARCH_SINCE,
+        reverse=True,
+    )
+    if err:
+        return []
+
+    now = time.time()
+    events: list[dict[str, Any]] = []
+    for i, line in enumerate(lines):
+        if not line or not _line_matches(line, pattern, mode):
+            continue
+        if not meets_importance_min(line, importance_min):
+            continue
+        ts = parse_timestamp(line, now, source=uri)
+        events.append({
+            "id": f"j{abs(hash(uri)) % (10 ** 8)}-{i}",
+            "source": uri,
+            "line": line,
+            "ts": ts,
+            "received_at": sort_key(ts, now),
+            "line_index": i,
+            "read_from": 0,
+            "compressed": False,
+            "forward_only": True,
+            "journal": True,
+            "severity": classify_line(line),
+        })
+        if len(events) >= limit:
+            break
+    return events
+
+
 def search_highlight_terms(query: str, mode: SearchMode) -> list[str]:
     if mode == "regex":
         return []
@@ -105,14 +163,33 @@ def search_logs(
 
     limit = limit or config.SEARCH_MAX_RESULTS
     if path is not None:
-        if not path.is_file():
+        path_str = str(path)
+        if is_journal_source(path_str):
+            events = search_journal(path_str, query, mode, limit=limit, importance_min=importance_min)
+        elif not path.is_file():
             return [], f"Not a file: {path}"
-        events = search_file(path, query, mode, limit=limit, importance_min=importance_min)
+        else:
+            events = search_file(path, query, mode, limit=limit, importance_min=importance_min)
     else:
         roots = log_dirs()
         if log_dir is not None:
             roots = [log_dir.resolve()]
         events = []
+        journal_ok, _ = journal_available()
+        if journal_ok and not localhost_only:
+            for spec in list_journal_sources():
+                remaining = limit - len(events)
+                if remaining <= 0:
+                    break
+                events.extend(
+                    search_journal(
+                        spec.uri,
+                        query,
+                        mode,
+                        limit=remaining,
+                        importance_min=importance_min,
+                    )
+                )
         for root in roots:
             root_resolved = root.resolve()
             for fp in list_log_files(root):

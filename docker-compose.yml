@@ -16,6 +16,10 @@ services:
       # File-tail sources (syslogb core)
       - ${LOG_DIRS_HOST:-/var/log}:/var/log:ro
       - /var/log/remote:/var/log/remote:ro
+      # systemd journal (read-only; works on any systemd host)
+      - /run/log/journal:/run/log/journal:ro
+      - /var/log/journal:/var/log/journal:ro
+      - /etc/machine-id:/etc/machine-id:ro
       # Optional archive reads during migration
       - ${LOGGY_DATA_PATH:-/home/kk/local-devel/loggy/data}:/loggy:ro
       - ${NETSYSLOG_DATA_PATH:-/home/kk/local-devel/netsyslog/data}:/netsyslog:ro
@@ -26,6 +30,8 @@ services:
       LOG_INTEL_GEOIP_MMDB_PATH: /geoip/dbip-city-lite.mmdb
       LOGGY_DB_PATH: /loggy/loggy.db
       NETSYSLOG_DB_PATH: /netsyslog/events.sqlite
+      JOURNAL_ENABLED: "1"
+      # Leave JOURNAL_DIRECTORY unset so journalctl uses mounted /var/log/journal + /run/log/journal
     extra_hosts:
       - "host.docker.internal:host-gateway"
     cap_add:

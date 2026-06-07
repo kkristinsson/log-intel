@@ -9,6 +9,12 @@ from typing import Optional
 
 from log_intel.syslogb.app import config
 from log_intel.syslogb.app.alert_engine import AlertEngine
+from log_intel.syslogb.app.journal_source import (
+    journal_available,
+    journal_sidebar_entry,
+    list_journal_sources,
+)
+from log_intel.syslogb.app.journal_tailer import JournalTailer
 from log_intel.syslogb.app.log_dirs import (
     LOCALHOST_GROUP_LABEL,
     display_name_for_dir,
@@ -68,17 +74,24 @@ class TailService:
     def __init__(self, alert_engine: AlertEngine | None = None) -> None:
         self._buffer = MergeBuffer(config.TAIL_BUFFER_SIZE)
         self._tailers: dict[Path, FileTailer] = {}
+        self._journal_tailers: dict[str, JournalTailer] = {}
         self._lock = threading.Lock()
         self._scanner: MultiDirectoryScanner | None = None
         self._sse_queues: list[queue.Queue] = []
         self._sse_lock = threading.Lock()
         self._alert_engine = alert_engine
+        self._journal_ok = False
+        self._journal_msg = ""
 
         self._buffer.subscribe(self._broadcast_event)
 
     @property
     def buffer(self) -> MergeBuffer:
         return self._buffer
+
+    @property
+    def journal_status(self) -> dict[str, str | bool]:
+        return {"ok": self._journal_ok, "message": self._journal_msg}
 
     def _on_failure_line(self, source: str, line: str, ts: Optional[float], received_at: float) -> None:
         self._buffer.push(source, line, ts, received_at)
@@ -128,6 +141,26 @@ class TailService:
         if tailer:
             tailer.stop()
 
+    def _start_journal_tailers(self) -> None:
+        self._journal_ok, self._journal_msg = journal_available()
+        if not self._journal_ok:
+            if config.JOURNAL_ENABLED:
+                logger.warning("Journal ingest disabled: %s", self._journal_msg)
+            return
+        for spec in list_journal_sources():
+            if spec.uri in self._journal_tailers:
+                continue
+            tailer = JournalTailer(spec, self._on_failure_line, on_raw_line=self._on_raw_line)
+            self._journal_tailers[spec.uri] = tailer
+            tailer.start()
+        logger.info("Journal tail started (%s sources)", len(self._journal_tailers))
+
+    def _stop_journal_tailers(self) -> None:
+        for uri in list(self._journal_tailers.keys()):
+            t = self._journal_tailers.pop(uri, None)
+            if t:
+                t.stop()
+
     def start(self) -> tuple[bool, str]:
         directories = log_dirs()
         ok, msg = check_log_dirs_access(directories)
@@ -139,9 +172,13 @@ class TailService:
             on_stop=self._stop_tailer,
         )
         self._scanner.start()
+        self._start_journal_tailers()
+        if self._journal_ok:
+            msg = f"{msg} | journal OK" if msg else "journal OK"
         return ok, msg
 
     def stop(self) -> None:
+        self._stop_journal_tailers()
         if self._scanner:
             self._scanner.stop()
             self._scanner = None
@@ -164,6 +201,12 @@ class TailService:
             watched = self._scanner.active_files
 
         entries: list[dict] = []
+        if self._journal_ok:
+            for spec in list_journal_sources():
+                entries.append(
+                    journal_sidebar_entry(spec, watching=spec.uri in self._journal_tailers)
+                )
+
         for root in log_dirs():
             root_resolved = root.resolve()
             for p in list_log_files(root):
@@ -196,12 +239,15 @@ class TailService:
 
         entries.sort(
             key=lambda e: (
-                e["group_label"].lower(),
-                e["log_dir_label"].lower(),
-                e["name"].lower(),
+                e.get("group_label", "").lower(),
+                e.get("log_dir_label", "").lower(),
+                e.get("name", "").lower(),
             )
         )
         return entries
 
     def log_groups(self) -> list[dict]:
-        return list_log_groups()
+        groups = list_log_groups()
+        if self._journal_ok:
+            groups.insert(0, {"path": "journal://systemd", "label": "systemd journal", "count": len(list_journal_sources())})
+        return groups

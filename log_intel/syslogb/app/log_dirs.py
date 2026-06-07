@@ -161,6 +161,8 @@ def file_matches_group(path: Path, group_path: str, root: Path | None = None) ->
 def resolve_safe_path(user_path: str) -> Path:
     """Resolve path and ensure it stays under a configured log directory."""
     candidate = Path(user_path)
+    if candidate.as_posix().startswith("journal://"):
+        return candidate
     if not candidate.is_absolute():
         roots = log_dirs()
         if not roots:

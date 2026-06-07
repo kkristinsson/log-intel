@@ -8,6 +8,8 @@ from typing import Any, Iterator
 from log_intel.syslogb.app import config
 from log_intel.syslogb.app.columnizers import enrich_event, resolve_columnizer
 from log_intel.syslogb.app.file_reader import recent_lines
+from log_intel.syslogb.app.journal_reader import read_journal_file_page
+from log_intel.syslogb.app.journal_source import is_journal_source
 from log_intel.syslogb.app.search import search_logs
 from log_intel.syslogb.app.store import AppStore
 
@@ -49,9 +51,16 @@ def collect_file_events(
     order: str = "desc",
     store: AppStore | None = None,
 ) -> list[dict[str, Any]]:
-    events, err = recent_lines(path, failures_only=failures_only)
-    if err:
-        raise ValueError(err)
+    path_str = str(path)
+    if is_journal_source(path_str):
+        page, err = read_journal_file_page(path_str, direction="tail", failures_only=failures_only)
+        if err:
+            raise ValueError(err)
+        events = page.get("events", [])
+    else:
+        events, err = recent_lines(path, failures_only=failures_only)
+        if err:
+            raise ValueError(err)
     reverse = order != "asc"
     events.sort(key=lambda e: e["received_at"], reverse=reverse)
     return _enrich_all(_cap(events), store)
