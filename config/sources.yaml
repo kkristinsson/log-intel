@@ -1,0 +1,37 @@
+# Source registry for log-intel unified hub.
+# Used for documentation and future routing rules; classification is automatic at ingest.
+
+sources:
+  - id: palo_alto
+    description: Palo Alto PAN-OS TRAFFIC/THREAT/SYSTEM CSV syslog
+    source_type: palo_alto
+    ingest: syslog
+
+  - id: windows_syslogpusher
+    description: Windows event logs and file tails via Syslog Pusher (RFC 5424)
+    source_type: windows
+    ingest: syslog
+    notes: Point Syslog Pusher at hub :514 or rsyslog per-host files for syslogb
+
+  - id: generic_syslog
+    description: Generic syslog with IP pairs in message body
+    source_type: generic
+    ingest: syslog
+
+  - id: syslogb_files
+    description: File-based logs tailed by syslogb (read-only via HTTP adapter)
+    source_type: imported
+    adapter: syslogb
+    base_url_env: SYSLOGB_BASE_URL
+
+  - id: loggy_archive
+    description: Historical Palo Alto logs from loggy.db (read-only adapter)
+    source_type: imported
+    adapter: loggy
+    db_path_env: LOGGY_DB_PATH
+
+  - id: netsyslog_archive
+    description: Historical geo flows from netsyslog (read-only adapter)
+    source_type: imported
+    adapter: netsyslog
+    db_path_env: NETSYSLOG_DB_PATH

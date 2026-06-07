@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>log-intel — Unified Log Intelligence</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <header>
+    <h1>log-intel</h1>
+    <p class="tagline">Unified syslog hub — live, search, firewall, geo, alerts</p>
+    <nav id="tabs">
+      <button data-tab="overview" class="active">Overview</button>
+      <button data-tab="live">Live</button>
+      <button data-tab="search">Search</button>
+      <button data-tab="firewall">Firewall</button>
+      <button data-tab="geo">Geo map</button>
+      <button data-tab="alerts">Alerts</button>
+      <button data-tab="analysis">Analysis</button>
+    </nav>
+  </header>
+
+  <main>
+    <section id="panel-overview" class="panel active">
+      <div id="health-cards" class="cards"></div>
+      <h2>Recent critical / error events</h2>
+      <div id="overview-events" class="log-list"></div>
+    </section>
+
+    <section id="panel-live" class="panel">
+      <div class="toolbar">
+        <label>Min importance
+          <select id="live-importance">
+            <option value="info">info+</option>
+            <option value="warning">warning+</option>
+            <option value="error" selected>error+</option>
+            <option value="critical">critical</option>
+          </select>
+        </label>
+      </div>
+      <div id="live-feed" class="log-list stream"></div>
+    </section>
+
+    <section id="panel-search" class="panel">
+      <form id="search-form" class="toolbar">
+        <input type="text" id="search-q" placeholder="Search terms or regex" size="40">
+        <label><input type="checkbox" id="include-syslogb"> syslogb</label>
+        <label><input type="checkbox" id="include-loggy"> loggy archive</label>
+        <button type="submit">Search</button>
+      </form>
+      <div id="search-results" class="log-list"></div>
+    </section>
+
+    <section id="panel-firewall" class="panel">
+      <div class="toolbar">
+        <label>Hours <input type="number" id="fw-hours" value="24" min="1" max="168"></label>
+        <label>Log type
+          <select id="fw-log-type">
+            <option value="TRAFFIC">TRAFFIC</option>
+            <option value="THREAT">THREAT</option>
+            <option value="SYSTEM">SYSTEM</option>
+          </select>
+        </label>
+        <button id="fw-refresh">Refresh</button>
+      </div>
+      <div id="firewall-table" class="log-list"></div>
+    </section>
+
+    <section id="panel-geo" class="panel">
+      <div class="toolbar">
+        <label>Hours
+          <select id="geo-hours">
+            <option value="1">1</option>
+            <option value="6">6</option>
+            <option value="24" selected>24</option>
+            <option value="72">72</option>
+          </select>
+        </label>
+        <button id="geo-refresh">Refresh</button>
+      </div>
+      <div id="map"></div>
+    </section>
+
+    <section id="panel-alerts" class="panel">
+      <h2>Alert history</h2>
+      <div id="alert-events" class="log-list"></div>
+    </section>
+
+    <section id="panel-analysis" class="panel">
+      <p>Select event IDs (comma-separated) from Search or Firewall, then run hub Ollama analysis.</p>
+      <form id="analyze-form" class="toolbar">
+        <input type="text" id="analyze-ids" placeholder="e.g. 12,13,14" size="30">
+        <button type="submit">Analyze</button>
+      </form>
+      <pre id="analyze-result"></pre>
+    </section>
+  </main>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="/static/app.js"></script>
+</body>
+</html>

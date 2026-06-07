@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+
+{% block title %}LLM Analysis — {{ app_name }}{% endblock %}
+
+{% block topbar_extra %}
+<a class="btn" href="/">← Back</a>
+{% endblock %}
+
+{% block body %}
+<main class="analysis-page">
+  <h2 class="page-heading">LLM Analysis</h2>
+  <p class="meta">File: <code>{{ job.file_path }}</code></p>
+  <p class="meta">Status: <strong id="analysis-status-label">{{ job.status }}</strong></p>
+
+  {% if job.error %}
+  <div id="analysis-progress" class="analyze-progress is-error">
+    <div class="analyze-progress-head">
+      <span id="analysis-progress-stage" class="analyze-progress-stage">Failed</span>
+      <span id="analysis-progress-pct" class="analyze-progress-pct">100%</span>
+    </div>
+    <div class="analyze-progress-track">
+      <div id="analysis-progress-fill" class="analyze-progress-fill" style="width: 100%"></div>
+    </div>
+  </div>
+  <div class="alert err">{{ job.error }}</div>
+  {% elif job.result %}
+  <div id="analysis-progress" class="analyze-progress is-done">
+    <div class="analyze-progress-head">
+      <span id="analysis-progress-stage" class="analyze-progress-stage">Complete</span>
+      <span id="analysis-progress-pct" class="analyze-progress-pct">100%</span>
+    </div>
+    <div class="analyze-progress-track">
+      <div id="analysis-progress-fill" class="analyze-progress-fill" style="width: 100%"></div>
+    </div>
+  </div>
+  <section class="card">
+    <h2>Severity: {{ job.result.severity }}</h2>
+    <p>{{ job.result.summary }}</p>
+    {% if job.result.anomalies %}
+    <h3>Anomalies</h3>
+    <ul class="anomaly-list">
+      {% for a in job.result.anomalies %}
+      <li>
+        <strong>{{ a.title }}</strong>
+        <p>{{ a.detail }}</p>
+        {% if a.related_log_indexes %}
+        <span class="hint">Lines: {{ a.related_log_indexes | join(', ') }}</span>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  </section>
+  {% else %}
+  <div id="analysis-progress" class="analyze-progress{% if job.status == 'pending' %} is-indeterminate{% endif %}">
+    <div class="analyze-progress-head">
+      <span id="analysis-progress-stage" class="analyze-progress-stage">{{ job.progress_stage or 'Analysis in progress…' }}</span>
+      <span id="analysis-progress-pct" class="analyze-progress-pct">{{ job.progress_pct or 0 }}%</span>
+    </div>
+    <div class="analyze-progress-track">
+      <div id="analysis-progress-fill" class="analyze-progress-fill" style="width: {{ job.progress_pct or 0 }}%"></div>
+    </div>
+  </div>
+  {% endif %}
+
+  {% if recent_analyses %}
+  <section class="analysis-recent-panel">
+    <h3>Recent analyses</h3>
+    <ul class="analysis-history-list">
+      {% for a in recent_analyses %}
+      <li class="analysis-history-item">
+        <a class="analysis-history-link" href="/analysis/{{ a.id }}">
+          <span class="analysis-history-file">{{ a.file_name }}</span>
+          <span class="analysis-history-meta">
+            {% if a.status == 'done' and a.severity %}
+            <span class="analysis-history-badge severity-{{ a.severity }}">{{ a.severity }}</span>
+            <span class="analysis-history-summary">{{ a.summary }}</span>
+            {% elif a.error %}
+            <span class="analysis-history-badge">failed</span>
+            <span class="analysis-history-summary">{{ a.error }}</span>
+            {% endif %}
+          </span>
+        </a>
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+</main>
+{% endblock %}
+
+{% block scripts %}
+{% if not job.result and not job.error %}
+<script>
+(() => {
+  const jobId = {{ job.id | tojson }};
+  const stageEl = document.getElementById("analysis-progress-stage");
+  const pctEl = document.getElementById("analysis-progress-pct");
+  const fillEl = document.getElementById("analysis-progress-fill");
+  const statusEl = document.getElementById("analysis-status-label");
+  const panelEl = document.getElementById("analysis-progress");
+
+  async function poll() {
+    const res = await fetch(`/api/analyze/${jobId}`);
+    const job = await res.json();
+    if (!res.ok) return;
+
+    const pct = job.progress_pct ?? 0;
+    const stage = job.progress_stage || job.status || "Working…";
+    stageEl.textContent = stage;
+    pctEl.textContent = `${pct}%`;
+    fillEl.style.width = `${pct}%`;
+    statusEl.textContent = job.status;
+    panelEl.classList.toggle("is-indeterminate", job.status === "pending" || (job.status === "running" && pct < 8));
+
+    if (job.status === "done" || job.status === "error") {
+      panelEl.classList.remove("is-indeterminate");
+      panelEl.classList.add(job.status === "done" ? "is-done" : "is-error");
+      fillEl.style.width = "100%";
+      location.reload();
+    }
+  }
+
+  setInterval(poll, 1000);
+  poll();
+})();
+</script>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,397 @@
+{% extends "base.html" %}
+
+{% block title %}{{ app_name }}{% endblock %}
+
+{% block topbar_extra %}
+<span class="meta topbar-log-dir">LOG_DIRS: {{ log_dirs | join(', ') }}</span>
+{% if llm_enabled %}
+<span id="ollama-status" class="badge {{ 'ok' if ollama_ok else 'err' }}" title="{{ ollama_msg }}">LLM: {{ llm_provider }} · chat={{ llm_chat_model }} · embed={{ llm_embed_model }}</span>
+{% endif %}
+{% endblock %}
+
+{% block body %}
+<div class="layout">
+  <aside class="sidebar">
+    <h2>Log files</h2>
+    <a class="btn primary hub-sidebar-link" href="{{ url_for('hub.hub_overview') }}">Network hub →</a>
+    <p class="hint hub-sidebar-hint">Live Palo Alto syslog, geo map, firewall</p>
+    <p id="sidebar-groups-hint" class="hint sidebar-hint hidden">Groups start collapsed — click to expand, double-click to search that folder.</p>
+    <ul id="file-list" class="file-list"></ul>
+    {% if llm_enabled %}
+    <button
+      id="analyze-btn"
+      class="btn primary analyze-trigger"
+      data-analyze-scope="full"
+      type="button"
+      disabled
+      title="Run LLM anomaly analysis on the entire log file (large files use RAG + embeddings)"
+    >Analyze entire log file</button>
+    <div id="analyze-progress" class="analyze-progress hidden" aria-live="polite">
+      <div class="analyze-progress-head">
+        <span id="analyze-progress-stage" class="analyze-progress-stage">Starting…</span>
+        <span id="analyze-progress-pct" class="analyze-progress-pct">0%</span>
+        <button id="analyze-cancel-btn" class="btn btn-sm analyze-cancel-btn hidden" type="button">Cancel</button>
+      </div>
+      <div class="analyze-progress-track">
+        <div id="analyze-progress-fill" class="analyze-progress-fill"></div>
+      </div>
+    </div>
+    <p id="analyze-status" class="hint"></p>
+    <section id="analysis-history" class="analysis-history" aria-label="Recent LLM analyses">
+      <h3 class="analysis-history-title">Recent analyses</h3>
+      <p id="analysis-history-empty" class="hint analysis-history-empty">No saved analyses yet.</p>
+      <ul id="analysis-history-list" class="analysis-history-list"></ul>
+    </section>
+    {% endif %}
+  </aside>
+
+  <main class="main">
+    <div class="search-toolbar">
+      <div class="search-bar">
+        <select id="saved-search-select" title="Saved searches">
+          <option value="">Saved searches…</option>
+        </select>
+        <button id="saved-search-save-btn" class="btn" type="button" title="Save current search">Save</button>
+        <button id="saved-search-delete-btn" class="btn" type="button" hidden title="Delete saved search">Delete</button>
+        <input id="search-input" type="search" placeholder="Search: terms, AND/OR/NOT, (parentheses), &quot;phrases&quot;…" autocomplete="off">
+        <select id="search-scope" title="Search scope">
+          <option value="all">All directories</option>
+        </select>
+        <select id="search-mode" title="Search mode">
+          <option value="text">Text</option>
+          <option value="regex">Regexp</option>
+        </select>
+        <button id="search-btn" class="btn primary" type="button">Search</button>
+        <button id="search-clear-btn" class="btn" type="button" hidden>Clear</button>
+        <button id="search-help-btn" class="btn btn-link" type="button">Help</button>
+      </div>
+    </div>
+    <div class="toolbar">
+      <label id="log-time-window-wrap" class="hidden" title="Limit initial load to recent lines by timestamp">
+        Time range
+        <select id="log-time-window">
+          <option value="15m">Last 15 min</option>
+          <option value="1h" selected>Last 1 hour</option>
+          <option value="6h">Last 6 hours</option>
+          <option value="24h">Last 24 hours</option>
+          <option value="7d">Last 7 days</option>
+          <option value="all">All (tail window)</option>
+        </select>
+      </label>
+      <label>
+        Sort
+        <select id="sort-order">
+          <option value="desc" {{ 'selected' if default_order == 'desc' else '' }}>Newest on top</option>
+          <option value="asc" {{ 'selected' if default_order == 'asc' else '' }}>Newest on bottom</option>
+        </select>
+      </label>
+      <label>
+        Severity
+        <select id="importance-min" title="Server filter: lines at or above severity">
+          <option value="">All</option>
+          <option value="warning">Warning+</option>
+          <option value="error">Error+</option>
+          <option value="critical">Critical</option>
+        </select>
+      </label>
+      <button id="load-older-btn" class="btn" type="button" disabled hidden>Load older</button>
+      <button id="load-newer-btn" class="btn" type="button" disabled hidden>Load newer</button>
+      <span id="file-range-hint" class="hint hidden"></span>
+      <button id="pause-btn" class="btn">Pause</button>
+      <button id="columns-toggle-btn" class="btn" type="button" title="Column view: sort and filter by parsed fields">Columns</button>
+      <select id="export-format" class="export-format-select" title="Export format">
+        <option value="txt">Export txt</option>
+        <option value="csv">Export csv</option>
+        <option value="jsonl">Export jsonl</option>
+      </select>
+      <button id="export-btn" class="btn" type="button">Download</button>
+      <span id="view-label" class="hint">All files</span>
+      <span id="stream-status" class="hint">Connecting…</span>
+      {% if llm_enabled %}
+      <button
+        id="analyze-btn-toolbar"
+        class="btn primary analyze-trigger analyze-trigger-toolbar"
+        data-analyze-scope="window"
+        type="button"
+        disabled
+        title="Analyze only the Time range shown for the open log file"
+      >Analyze time range</button>
+      {% endif %}
+    </div>
+    <div id="activity-progress" class="analyze-progress activity-progress hidden" aria-live="polite" aria-busy="false">
+      <div class="analyze-progress-head">
+        <span id="activity-progress-stage" class="analyze-progress-stage">Loading…</span>
+        <span id="activity-progress-pct" class="analyze-progress-pct">0%</span>
+        <button id="activity-cancel-btn" class="btn btn-sm analyze-cancel-btn hidden" type="button">Cancel</button>
+      </div>
+      <div class="analyze-progress-track">
+        <div id="activity-progress-fill" class="analyze-progress-fill"></div>
+      </div>
+    </div>
+    <div id="log-view-stack" class="log-view-stack">
+      <div id="log-column-header" class="log-column-header hidden" aria-hidden="true"></div>
+      <div id="log-view-single" class="log-feed"></div>
+    </div>
+    <div id="log-view-split" class="split-view hidden">
+      <section class="split-pane split-pane-results">
+        <h3 class="pane-title">Filter results <span class="hint">(double-click to jump to file · click to select for export)</span></h3>
+        <div id="search-column-header" class="log-column-header hidden" aria-hidden="true"></div>
+        <div id="search-results-feed" class="log-feed pane-feed"></div>
+      </section>
+    </div>
+  </main>
+</div>
+
+<div id="search-help-modal" class="log-modal hidden" role="dialog" aria-modal="true" aria-labelledby="search-help-title">
+  <div class="log-modal-backdrop" id="search-help-backdrop"></div>
+  <div class="log-modal-panel help-modal-panel">
+    <header class="log-modal-header">
+      <h3 id="search-help-title" class="log-modal-title">Search help</h3>
+      <button id="search-help-close" class="btn log-modal-close" type="button" aria-label="Close">×</button>
+    </header>
+    <div class="help-modal-body">
+      <section>
+        <h4>Overview</h4>
+        <p>Search scans the tail of each log file (default <strong>50&nbsp;MB</strong> per file, configurable as <code>SEARCH_MAX_BYTES_PER_FILE</code>). Use <strong>Scope</strong> to search all configured directories, one directory, or the file selected in the sidebar.</p>
+        <p>Press <strong>Search</strong> or <kbd>Enter</kbd>. Use <strong>Clear</strong> to return to the live view. The toolbar <strong>Severity</strong> filter applies to search server-side. Save queries with <strong>Save</strong> and reload them from <strong>Saved searches</strong>.</p>
+        <p>A progress bar appears below the toolbar while search or file loads run.</p>
+      </section>
+
+      <section>
+        <h4>Log files sidebar</h4>
+        <p>With <code>LOG_RECURSIVE=1</code>, files at the log root and under common local folders (<strong>apt</strong>, <strong>auth</strong>, <strong>sysstat</strong>, …) appear under <strong>localhost</strong> with subfolder labels; remote host folders (often IP names) stay as separate groups. Groups start <strong>collapsed</strong>.</p>
+        <ul>
+          <li><strong>Click</strong> a group row — expand or collapse its log files</li>
+          <li><strong>Double-click</strong> a group row — set search scope to that group (same as choosing it in <strong>Scope</strong>)</li>
+          <li><strong>Click</strong> a log file — open it in the main pane</li>
+          <li><strong>⏱</strong> before a filename — scheduled LLM analysis is configured (hover for next run; muted if disabled)</li>
+          <li><strong>●</strong> (green) — file is actively watched in the live tail</li>
+          <li><strong>All files</strong> — combined live stream of failure lines from all watched plain files</li>
+        </ul>
+        <p>Right-click a readable file for <strong>Schedule analysis…</strong> (nightly / every 2 nights / weekly, with optional webhook or email alerts).</p>
+      </section>
+
+      <section>
+        <h4>File view and live tail</h4>
+        <ul>
+          <li><strong>Time range</strong> — limits the <em>initial</em> load by <strong>parsed event time</strong> (see Timestamps and remote logs below); if nothing matches, syslogb shows the recent tail with a hint.</li>
+          <li><strong>All (tail window)</strong> — best for quiet logs (e.g. <code>mail.log</code>) or when you want byte-tail without a time cut-off.</li>
+          <li>While you stay scrolled to the <strong>top</strong> (newest-first) or <strong>bottom</strong> (oldest-first), new lines are appended automatically on plain files.</li>
+          <li>Scroll away from the edge to read history without the view jumping.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h4>Timestamps and remote logs</h4>
+        <p>Logs forwarded by <strong>syslogpusher</strong> (or other remote senders) often have <em>two</em> timestamps on one line:</p>
+        <ul>
+          <li><strong>Leading prefix</strong> — when the central syslog server received the message (e.g. <code>May 18 06:39:49 host …</code>)</li>
+          <li><strong>Embedded in the message</strong> — the real application event time (e.g. <code>[sms.2024-11-05] - 23:32:55.288</code> in <code>Pri.log</code>)</li>
+        </ul>
+        <p>By default syslogb uses the <strong>leading</strong> timestamp. For known formats, <strong>timestamp parsers</strong> (Settings → Timestamp parsers) extract the embedded date instead — used for sort order, <strong>Time range</strong> filtering, and export.</p>
+        <p>Built-in <strong>SMS Pri logs</strong> is enabled for <code>Pri.log</code>. Lines without a matching embedded date fall back to the leading timestamp. Other filenames are unaffected.</p>
+        <p>On Windows hosts, enable <strong>Only new</strong> on the relevant syslogpusher directory watch to avoid replaying old file content on service restart.</p>
+      </section>
+
+      <section>
+        <h4>Search scope</h4>
+        <ul>
+          <li><strong>All directories</strong> — search every readable file under all configured <code>LOG_DIRS</code></li>
+          <li><strong>Directory name</strong> — limit search to one log root</li>
+          <li><strong>Host path</strong> — when recursive grouping is enabled, each host subdirectory appears here; limits search to files under that folder</li>
+          <li><strong>Selected file</strong> — appears when a sidebar file is selected; searches only that file</li>
+        </ul>
+      </section>
+
+      <section>
+        <h4>Text mode (boolean queries)</h4>
+        <p>Text mode matches substrings in each log line. Combine conditions with boolean operators, similar to Palo Alto log search:</p>
+        <ul>
+          <li><code>AND</code> — all conditions must match (also implied between adjacent terms: <code>error ssh</code> means <code>error AND ssh</code>)</li>
+          <li><code>OR</code> — at least one condition must match</li>
+          <li><code>NOT</code> — negates the following term or grouped expression</li>
+          <li><code>( )</code> — group expressions to control precedence</li>
+          <li><code>"phrase"</code> or <code>'phrase'</code> — match an exact phrase containing spaces</li>
+        </ul>
+        <p><code>AND</code> binds tighter than <code>OR</code>. Example: <code>a OR b AND c</code> is evaluated as <code>a OR (b AND c)</code>.</p>
+        <p>Text search is case-insensitive unless the server is configured with <code>SEARCH_CASE_SENSITIVE=1</code>.</p>
+      </section>
+
+      <section>
+        <h4>Text examples</h4>
+        <dl class="help-examples">
+          <dt><code>Failed AND ssh</code></dt>
+          <dd>Lines containing both <em>Failed</em> and <em>ssh</em>.</dd>
+          <dt><code>error AND (ssh OR sudo)</code></dt>
+          <dd>Lines with <em>error</em> and either <em>ssh</em> or <em>sudo</em>.</dd>
+          <dt><code>"failed password" AND NOT success</code></dt>
+          <dd>Lines with the phrase <em>failed password</em> but not <em>success</em>.</dd>
+          <dt><code>(deny OR denied) AND src</code></dt>
+          <dd>Lines mentioning denial together with <em>src</em>.</dd>
+        </dl>
+      </section>
+
+      <section>
+        <h4>Regexp mode</h4>
+        <p>Regexp mode uses one Python <code>re</code> pattern per search. Boolean <code>AND</code>/<code>OR</code> operators are <em>not</em> applied in this mode — use regexp syntax instead, e.g. <code>error|fail</code> or <code>(ssh|sudo).*denied</code>.</p>
+      </section>
+
+      <section>
+        <h4>Results and navigation</h4>
+        <ul>
+          <li>Results respect the toolbar <strong>Sort</strong> order (newest on top or bottom).</li>
+          <li><strong>Click</strong> a line to select it for export (multi-select supported).</li>
+          {% if llm_enabled %}
+          <li><strong>Double-click</strong> a line in a log file view to explain it with the LLM.</li>
+          {% endif %}
+          <li><strong>Double-click</strong> a search result to jump to that file and line in the file view (use <strong>Load older</strong> if the line is outside the current page).</li>
+          <li>In file view, <strong>Load older</strong> / <strong>Load newer</strong> page through large files; <code>.gz</code> archives use forward-only line paging when enabled in Settings.</li>
+          <li>With <strong>Columns</strong> on, use the header row above the log list to sort (click a column name) or filter (type in the box under each column).</li>
+        </ul>
+      </section>
+
+      {% if llm_enabled %}
+      <section>
+        <h4>LLM analysis</h4>
+        <ul>
+          <li><strong>Analyze entire log file</strong> (sidebar) — full-file analysis; large files use RAG + embeddings.</li>
+          <li><strong>Analyze time range</strong> (toolbar) — only the open file and the selected <strong>Time range</strong>.</li>
+          <li><strong>Recent analyses</strong> (sidebar) — reopen the last completed reports; retention count is in Settings.</li>
+          <li><strong>Schedule analysis…</strong> (right-click a file) — recurring runs with optional alerts. Set <strong>APP_PUBLIC_URL</strong> in Settings so alert links work from email/Discord.</li>
+          <li><strong>Cancel</strong> on the activity bar stops a running explain, search, or analyze job.</li>
+        </ul>
+        <p><strong>Webhooks:</strong> Discord channel webhook URLs (<code>discord.com/api/webhooks/…</code>) post a readable message. Other URLs receive JSON. Use the same field for alert rules (Settings) and scheduled analysis.</p>
+      </section>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+{% if llm_enabled %}
+<div id="explain-modal" class="log-modal hidden" role="dialog" aria-modal="true" aria-labelledby="explain-modal-title">
+  <div class="log-modal-backdrop" id="explain-modal-backdrop"></div>
+  <div class="log-modal-panel explain-modal-panel">
+    <header class="log-modal-header">
+      <h3 id="explain-modal-title" class="log-modal-title">Explain log entry</h3>
+      <div class="log-modal-header-actions">
+        <button id="explain-modal-cancel-btn" class="btn btn-sm analyze-cancel-btn hidden" type="button">Cancel</button>
+        <button id="explain-modal-close" class="btn log-modal-close" type="button" aria-label="Close">×</button>
+      </div>
+    </header>
+    <div class="explain-modal-body">
+      <p id="explain-entry-source" class="explain-entry-source"></p>
+      <pre id="explain-entry-line" class="explain-entry-line"></pre>
+      <label class="explain-question-label">
+        Your question
+        <textarea id="explain-question" rows="3" placeholder="Explain this log entry. What does it mean, what likely caused it, and should I be concerned?"></textarea>
+      </label>
+      <div class="explain-actions">
+        <button id="explain-submit-btn" class="btn primary" type="button">Analyze with LLM</button>
+        <button id="explain-cancel-btn" class="btn explain-cancel-btn hidden" type="button">Cancel</button>
+        <span id="explain-status" class="hint"></span>
+      </div>
+      <div id="explain-progress" class="analyze-progress explain-progress hidden" aria-live="polite">
+        <div class="analyze-progress-head">
+          <span id="explain-progress-stage" class="analyze-progress-stage">Starting…</span>
+          <span id="explain-progress-pct" class="analyze-progress-pct">0%</span>
+          <button id="explain-progress-cancel-btn" class="btn btn-sm analyze-cancel-btn hidden" type="button">Cancel</button>
+        </div>
+        <div class="analyze-progress-track">
+          <div id="explain-progress-fill" class="analyze-progress-fill"></div>
+        </div>
+      </div>
+      <div id="explain-result" class="explain-result hidden"></div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<div id="log-modal" class="log-modal hidden" role="dialog" aria-modal="true" aria-labelledby="log-modal-title">
+  <div class="log-modal-backdrop" id="log-modal-backdrop"></div>
+  <div class="log-modal-panel">
+    <header class="log-modal-header">
+      <h3 id="log-modal-title" class="log-modal-title">Full log</h3>
+      <div class="log-modal-header-actions">
+        {% if llm_enabled %}
+        <button id="log-modal-explain-btn" class="btn primary" type="button" disabled>Explain this line</button>
+        {% endif %}
+        <button id="log-modal-close" class="btn log-modal-close" type="button" aria-label="Close">×</button>
+      </div>
+    </header>
+    <div id="log-modal-feed" class="log-feed log-feed-numbered log-modal-feed"></div>
+  </div>
+</div>
+
+{% if llm_enabled %}
+<div id="schedule-modal" class="log-modal hidden" role="dialog" aria-modal="true" aria-labelledby="schedule-modal-title">
+  <div class="log-modal-backdrop" id="schedule-modal-backdrop"></div>
+  <div class="log-modal-panel schedule-modal-panel">
+    <header class="log-modal-header">
+      <h3 id="schedule-modal-title" class="log-modal-title">Schedule LLM analysis</h3>
+      <button id="schedule-modal-close" class="btn log-modal-close" type="button" aria-label="Close">×</button>
+    </header>
+    <div class="schedule-modal-body">
+      <p id="schedule-modal-file" class="hint schedule-modal-file"></p>
+      <label class="schedule-field"><input id="schedule-enabled" type="checkbox" checked> Enabled</label>
+      <label class="schedule-field">Run every
+        <select id="schedule-interval">
+          <option value="1">Night (daily)</option>
+          <option value="2">Every 2 nights</option>
+          <option value="7">Weekly</option>
+        </select>
+      </label>
+      <label class="schedule-field">At hour (local)
+        <select id="schedule-hour">
+          <option value="2" selected>02:00</option>
+          <option value="3">03:00</option>
+          <option value="4">04:00</option>
+          <option value="22">22:00</option>
+        </select>
+      </label>
+      <label class="schedule-field">Analyze
+        <select id="schedule-scope">
+          <option value="full">Entire log file</option>
+          <option value="window">Time range only</option>
+        </select>
+      </label>
+      <label id="schedule-window-wrap" class="schedule-field hidden">Time range
+        <select id="schedule-window">
+          <option value="24h" selected>Last 24 hours</option>
+          <option value="6h">Last 6 hours</option>
+          <option value="7d">Last 7 days</option>
+        </select>
+      </label>
+      <label class="schedule-field">Alert when severity ≥
+        <select id="schedule-min-severity">
+          <option value="warning" selected>Warning+</option>
+          <option value="error">Error+</option>
+          <option value="critical">Critical</option>
+        </select>
+      </label>
+      <label class="schedule-field"><input id="schedule-alert-anomalies" type="checkbox" checked> Alert on anomalies</label>
+      <label class="schedule-field">Webhook URL<input id="schedule-webhook" type="url" placeholder="Discord: discord.com/api/webhooks/… or custom URL"></label>
+      <p class="hint schedule-webhook-hint">Discord URLs post a channel message; other URLs receive JSON. Same as alert rules in Settings.</p>
+      <label class="schedule-field">Email to<input id="schedule-email" type="text" placeholder="ops@example.com"></label>
+      <p id="schedule-status" class="hint"></p>
+      <div class="schedule-actions">
+        <button id="schedule-save-btn" class="btn primary" type="button">Save schedule</button>
+        <button id="schedule-delete-btn" class="btn" type="button" hidden>Remove schedule</button>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="file-context-menu" class="context-menu hidden" role="menu" aria-label="Log file actions">
+  <button type="button" class="context-menu-item" data-action="analyze">Analyze entire log file</button>
+  <button type="button" class="context-menu-item" data-action="schedule">Schedule analysis…</button>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+  window.SYSLOGB_DEFAULT_ORDER = {{ default_order | tojson }};
+  window.SYSLOGB_LLM_ENABLED = {{ llm_enabled | tojson }};
+</script>
+<script src="{{ url_for('static', filename='virtual_feed.js') }}"></script>
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+{% endblock %}

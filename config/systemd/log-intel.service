@@ -1,0 +1,31 @@
+# log-intel (production). Install example:
+#   sudo cp config/systemd/log-intel.service /etc/systemd/system/
+#   sudo sed -i "s|/opt/log-intel|$(pwd)|g; s|User=logintel|User=$USER|" /etc/systemd/system/log-intel.service
+#   sudo systemctl daemon-reload && sudo systemctl enable --now log-intel
+#
+# Use one gunicorn worker only (live tail + hub ingest + LLM worker run in-process).
+
+[Unit]
+Description=log-intel unified log intelligence
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=logintel
+Group=adm
+WorkingDirectory=/opt/log-intel
+EnvironmentFile=-/opt/log-intel/.env
+ExecStart=/opt/log-intel/.venv/bin/gunicorn \
+  --workers 1 \
+  --threads 8 \
+  --timeout 600 \
+  --bind 0.0.0.0:9088 \
+  --access-logfile - \
+  --error-logfile - \
+  log_intel.wsgi:application
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

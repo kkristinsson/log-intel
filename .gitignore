@@ -1,0 +1,12 @@
+.venv/
+venv/
+data/
+geoip/*.mmdb
+.env
+dist/
+build/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.DS_Store

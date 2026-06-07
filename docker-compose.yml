@@ -1,0 +1,32 @@
+# Unified Log Intelligence — syslogb + hub in one container.
+services:
+  log-intel:
+    build: .
+    container_name: log-intel
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "${LOG_INTEL_HOST_SYSLOG_PORT:-5516}:514/udp"
+      - "${LOG_INTEL_HOST_SYSLOG_PORT:-5516}:514/tcp"
+      - "${LOG_INTEL_HOST_HTTP_PORT:-9088}:9088"
+    volumes:
+      - ./data:/data
+      - ./geoip:/geoip:ro
+      # File-tail sources (syslogb core)
+      - ${LOG_DIRS_HOST:-/var/log}:/var/log:ro
+      - /var/log/remote:/var/log/remote:ro
+      # Optional archive reads during migration
+      - ${LOGGY_DATA_PATH:-/home/kk/local-devel/loggy/data}:/loggy:ro
+      - ${NETSYSLOG_DATA_PATH:-/home/kk/local-devel/netsyslog/data}:/netsyslog:ro
+    environment:
+      LOG_INTEL_DATA_DIR: /data
+      DATA_DIR: /data
+      LOG_INTEL_SQLITE_PATH: /data/events.sqlite
+      LOG_INTEL_GEOIP_MMDB_PATH: /geoip/dbip-city-lite.mmdb
+      LOGGY_DB_PATH: /loggy/loggy.db
+      NETSYSLOG_DB_PATH: /netsyslog/events.sqlite
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    cap_add:
+      - NET_BIND_SERVICE

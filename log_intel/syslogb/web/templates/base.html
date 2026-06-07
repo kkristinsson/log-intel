@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en" class="theme-dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#0d1117">
+  <title>{% block title %}{{ app_name }}{% endblock %}</title>
+  <link rel="icon" href="{{ url_for('static', filename='branding/favicon.ico') }}" sizes="any">
+  <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='branding/favicon-32x32.png') }}">
+  <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='branding/favicon-16x16.png') }}">
+  <link rel="apple-touch-icon" href="{{ url_for('static', filename='branding/apple-touch-icon.png') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  {% block head %}{% endblock %}
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      {% if brand_logo_url %}
+      <a class="brand-logo-link" href="{{ url_for('index') if setup_complete else url_for('settings_page') }}" title="{{ app_name }}">
+        <img class="brand-logo" src="{{ brand_logo_url }}" alt="{{ app_name }}">
+      </a>
+      {% else %}
+      <div class="brand-text">
+        <h1>
+          {% if setup_complete %}
+          <a class="brand-home-link" href="{{ url_for('index') }}">{{ app_name }}</a>
+          {% else %}
+          {{ app_name }}
+          {% endif %}
+          <span class="app-version">v{{ app_version }}</span>
+        </h1>
+        {% if brand_tagline %}<span class="brand-tagline">{{ brand_tagline }}</span>{% endif %}
+      </div>
+      {% endif %}
+    </div>
+    <a class="btn btn-hub-nav" href="{{ url_for('hub.hub_overview') }}" title="Live syslog, firewall, geo map">Network hub</a>
+    {% block topbar_extra %}{% endblock %}
+    <div class="topbar-right">
+    {% if current_user.is_authenticated or not auth_enabled or not setup_complete %}
+    <div class="topbar-nav">
+      {% if setup_complete %}
+      <a class="btn btn-link" href="{{ url_for('index') }}">Logs</a>
+      {% endif %}
+      <a class="btn btn-link" href="{{ url_for('settings_page') }}">Settings</a>
+      <a class="btn btn-link" href="{{ url_for('alerts_page') }}">Alerts</a>
+    </div>
+    {% endif %}
+    {% if current_user.is_authenticated %}
+    <div class="topbar-user">
+      <span class="hint">{{ current_user.username }}</span>
+      <form class="logout-form" method="post" action="{{ url_for('logout') }}">
+        <button class="btn btn-link" type="submit">Sign out</button>
+      </form>
+    </div>
+    {% endif %}
+    <span class="copyright">{{ copyright_text }}</span>
+    </div>
+  </header>
+
+  {% block body %}{% endblock %}
+
+  <footer class="site-footer">
+    <span>{{ app_name }} v{{ app_version }}</span>
+    <span class="footer-sep">·</span>
+    <span>{{ copyright_text }}</span>
+    {% if brand_logo_link %}
+    <span class="footer-sep">·</span>
+    <a href="{{ brand_logo_link }}" target="_blank" rel="noopener noreferrer">comlink.se</a>
+    {% endif %}
+  </footer>
+
+  {% block scripts %}{% endblock %}
+</body>
+</html>

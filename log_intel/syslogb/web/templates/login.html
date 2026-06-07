@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+
+{% block title %}Sign in — {{ app_name }}{% endblock %}
+
+{% block body %}
+<main class="login-page">
+  <form class="login-card" method="post" action="{{ url_for('login') }}">
+    <h2>Sign in</h2>
+    {% if error %}
+    <p class="login-error" role="alert">{{ error }}</p>
+    {% endif %}
+    <label>
+      Username
+      <input name="username" type="text" autocomplete="username" required autofocus>
+    </label>
+    <label>
+      Password
+      <input name="password" type="password" autocomplete="current-password" required>
+    </label>
+    <button class="btn primary" type="submit">Sign in</button>
+    {% if ldap_configured %}
+    <p class="hint login-hint">Directory sign-in is tried first; the local admin account always remains available.</p>
+    {% endif %}
+  </form>
+</main>
+{% endblock %}

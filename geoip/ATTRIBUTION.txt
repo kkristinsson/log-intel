@@ -1,0 +1,12 @@
+If you use DB-IP Lite IP to City MMDB data (recommended):
+
+  © DB-IP.com — https://db-ip.com
+  Licensed under Creative Commons Attribution 4.0 International (CC BY 4.0):
+  https://creativecommons.org/licenses/by/4.0/
+
+Download the MMDB:
+  https://db-ip.com/db/download/ip-to-city-lite
+
+Save the file as dbip-city-lite.mmdb in this directory (or set GEOIP_CITY_DB).
+
+MaxMind GeoLite2-City.mmdb also works if you point GEOIP_CITY_DB at that file instead.

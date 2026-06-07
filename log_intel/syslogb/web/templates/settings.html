@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Settings — {{ app_name }}{% endblock %}
+{% block body %}
+<main class="settings-page" data-setup-mode="{{ '1' if setup_mode else '0' }}">
+  <div class="settings-page-header">
+    {% if setup_mode %}
+    <button id="settings-skip-btn" class="btn" type="button">Skip setup for now</button>
+    {% else %}
+    <a class="btn" href="{{ url_for('index') }}">← Back to logs</a>
+    {% endif %}
+  </div>
+  {% if setup_mode %}
+  <section class="setup-banner">
+    <h2>Welcome — configure syslogb</h2>
+    <p class="hint">Set <strong>LOG_DIR</strong>, then under LLM choose <strong>Hybrid</strong> (recommended for OpenAI / Grok / xAI): paste your API key and chat model. Local embedding for large files is installed by <code>install.sh</code> — you do not run that script yourself. Optionally enable sign-in.</p>
+  </section>
+  {% else %}
+  <h2>Settings</h2>
+  <p class="hint">Settings live in SQLite. On first install they are seeded from <code>.env</code> (or defaults). Saved values here always override <code>.env</code> (<code>DATA_DIR</code> still prefers env when set).</p>
+  {% endif %}
+
+  <section class="settings-panel llm-provider-panel" id="llm-provider-panel">
+    <h3>LLM provider</h3>
+    <div class="llm-provider-cards" id="llm-provider-cards">
+      <button type="button" class="llm-provider-card" data-provider="hybrid">
+        <span class="llm-provider-title">Hybrid (recommended)</span>
+        <span class="hint">Remote API for chat (OpenAI, Grok/xAI, …); local Ollama embed for large files — required for Grok (no /embeddings)</span>
+      </button>
+      <button type="button" class="llm-provider-card" data-provider="openai">
+        <span class="llm-provider-title">OpenAI-compatible API only</span>
+        <span class="hint">Remote chat and embeddings — API must support /embeddings</span>
+      </button>
+      <button type="button" class="llm-provider-card" data-provider="ollama">
+        <span class="llm-provider-title">Local Ollama only</span>
+        <span class="hint">All models on this machine (http://127.0.0.1:11434)</span>
+      </button>
+    </div>
+    <p id="llm-provider-active" class="hint"></p>
+  </section>
+
+  <div id="settings-sections" class="settings-sections"></div>
+  <div class="settings-actions">
+    {% if setup_mode %}
+    <button id="settings-complete-btn" class="btn primary" type="button">Save &amp; finish setup</button>
+    {% endif %}
+    <button id="settings-save-btn" class="btn{% if not setup_mode %} primary{% endif %}" type="button">Save</button>
+    <button id="settings-reload-btn" class="btn" type="button">Apply &amp; reload tail</button>
+    <span id="settings-status" class="hint"></span>
+  </div>
+  <section class="settings-panel settings-advanced" id="settings-advanced">
+    <h3>Columnizers</h3>
+    <div id="columnizers-list" class="columnizers-list"></div>
+    <button id="columnizer-add-btn" class="btn" type="button">Add regex columnizer</button>
+  </section>
+  <section class="settings-panel settings-advanced" id="settings-timestamp-parsers">
+    <h3>Timestamp parsers</h3>
+    <p class="hint">Use when log lines carry the <strong>real event time inside the message</strong> (common for remote/syslogpusher files). Parsers apply only to files matching <code>file_glob</code>; other logs keep default leading-timestamp parsing. Built-in <strong>SMS Pri logs</strong> targets <code>Pri.log</code> — use <strong>Edit</strong> to tune or disable it. See <strong>Help</strong> on the main page for examples.</p>
+    <div id="timestamp-parsers-list" class="columnizers-list"></div>
+    <button id="timestamp-parser-add-btn" class="btn" type="button">Add timestamp parser</button>
+  </section>
+  <section class="settings-panel settings-advanced" id="settings-alerts-panel">
+    <h3>Alert rules</h3>
+    <p class="hint">Webhook: paste a <strong>Discord</strong> channel webhook URL (<code>discord.com/api/webhooks/…</code>) for a formatted message, or any URL for JSON. Configure SMTP for email. Delivery history: <a href="/alerts">Alerts</a>.</p>
+    <div id="alert-rules-list" class="alert-rules-list"></div>
+    <button id="alert-rule-add-btn" class="btn" type="button">Add alert rule</button>
+  </section>
+</main>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='settings.js') }}"></script>
+{% endblock %}
