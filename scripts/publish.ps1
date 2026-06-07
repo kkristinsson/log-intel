@@ -1,13 +1,33 @@
-param(
-    [string]$RuntimeIdentifier = "win-x64"
-)
-
 $ErrorActionPreference = "Stop"
+
+# Distribution target: 64-bit Intel/AMD Windows only (PE machine type AMD64).
+$RuntimeIdentifier = "win-x64"
+
 $root = Split-Path -Parent $PSScriptRoot
 $dist = Join-Path $root "dist"
 $exe = Join-Path $dist "SyslogPusher.exe"
 $staging = Join-Path $root "artifacts\publish"
 $serviceName = "SyslogPusher"
+
+function Assert-Amd64PeExecutable {
+    param([string]$Path)
+
+    $bytes = [System.IO.File]::ReadAllBytes($Path)
+    if ($bytes.Length -lt 0x40 -or [System.Text.Encoding]::ASCII.GetString($bytes, 0, 2) -ne "MZ") {
+        throw "Published file is not a valid Windows executable: $Path"
+    }
+
+    $peOffset = [BitConverter]::ToInt32($bytes, 0x3C)
+    if ($peOffset -lt 0 -or ($peOffset + 6) -gt $bytes.Length) {
+        throw "Published file has an invalid PE header: $Path"
+    }
+
+    # IMAGE_FILE_MACHINE_AMD64 = 0x8664
+    $machine = [BitConverter]::ToUInt16($bytes, $peOffset + 4)
+    if ($machine -ne 0x8664) {
+        throw "Expected amd64/x64 executable (PE machine 0x8664), got 0x{0:X4}: {1}" -f $machine, $Path
+    }
+}
 
 function Stop-SyslogPusherBeforePublish {
     $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
@@ -81,13 +101,15 @@ $publishArgs = @(
     "-p:DebugSymbols=false"
 )
 
-Write-Host "Publishing single-file SyslogPusher.exe (self-contained, $RuntimeIdentifier)..."
+Write-Host "Publishing single-file SyslogPusher.exe (self-contained, amd64/x64)..."
 dotnet publish (Join-Path $root "src\SyslogPusher.Service\SyslogPusher.Service.csproj") @publishArgs
 
 $published = Join-Path $staging "SyslogPusher.exe"
 if (-not (Test-Path $published)) {
     throw "Expected $published was not created."
 }
+
+Assert-Amd64PeExecutable -Path $published
 
 $outputExe = $exe
 try {

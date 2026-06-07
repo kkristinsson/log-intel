@@ -81,4 +81,7 @@ src/
 
 ## License
 
-MIT (add your license file as needed).
+[BSD 3-Clause License](LICENSE). You may use, modify, and distribute this
+software freely, including in commercial products and for resale, provided you
+retain the copyright notice and license terms. The copyright holder’s name may
+not be used to endorse derived products without permission.
