@@ -56,4 +56,4 @@ docker compose up -d --build
 5. Stop separate **syslogb**, **loggy**, **netsyslog**, and standalone **syslogpusher** repos/services.
 6. Keep old `data/` volumes mounted read-only until archive retention expires.
 
-Original repos are **not deleted** — they remain as reference and rollback copies.
+Original repos are **archived** (read-only on GitHub/Gitea) — kept for rollback reference, not for new deployments.
