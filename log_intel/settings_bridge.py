@@ -36,9 +36,9 @@ def bootstrap_settings_store() -> AppStore:
     os.environ.setdefault("DATA_DIR", str(data_dir))
     _store = AppStore(db_path=data_dir / "analyses.db")
     _store.seed_settings_if_empty()
+    _store.ensure_legacy_setup_complete()
     _store.seed_settings_values_from_env_if_empty()
     _store.sync_registry_settings()
-    _store.ensure_legacy_setup_complete()
     refresh_all_settings(_store)
     return _store
 

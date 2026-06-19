@@ -23,6 +23,35 @@ def test_setup_checklist_includes_core_items(monkeypatch) -> None:
     assert "webhook_secret" in ids
 
 
+def test_bootstrap_keeps_fresh_install_in_setup(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    from log_intel import settings_bridge
+
+    settings_bridge._store = None
+    store = settings_bridge.bootstrap_settings_store()
+
+    assert store.get("DATA_DIR") == str(tmp_path)
+    assert store.get("SETUP_COMPLETE") is None
+
+    settings_bridge._store = None
+
+
+def test_bootstrap_marks_legacy_settings_complete(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    from log_intel import settings_bridge
+    from log_intel.syslogb.app.store import AppStore
+
+    legacy_store = AppStore(db_path=tmp_path / "analyses.db")
+    legacy_store.set_many({"DATA_DIR": str(tmp_path)})
+
+    settings_bridge._store = None
+    store = settings_bridge.bootstrap_settings_store()
+
+    assert store.get("SETUP_COMPLETE") == "1"
+
+    settings_bridge._store = None
+
+
 def test_related_events_by_ip() -> None:
     with tempfile.TemporaryDirectory() as td:
         store = EventStore(str(Path(td) / "t.sqlite"), max_events=100)
