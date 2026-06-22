@@ -20,7 +20,7 @@
 ### loggy
 
 - UDP syslog ingest, Palo Alto parsing, Ollama batch → **hub ingest** + **`log_intel/loggy_ported/analysis_service`**
-- Hourly cards, meta summaries, trends → **`/hub/analysis`** and **`/hub/api/*`** (wired in v0.5.0)
+- Hourly cards, meta summaries, trends → **`/hub/analysis`** and **`/hub/api/*`** (wired in v0.9.1)
 - Historical logs → optional **`LOGGY_DB_PATH`** read-only mount
 
 ### netsyslog
@@ -31,7 +31,7 @@
 ### syslogpusher (Windows client)
 
 - WPF wizard, Windows service, file/event collectors → **`syslog-pusher/`**
-- Pre-built binary → **`syslog-pusher/dist/SyslogPusher.exe`**
+- Pre-built binary → **`syslog-pusher/dist/SyslogPusher-0.9.1.exe`**
 - Point destination at log-intel syslog port (default host **5516** → container **514**)
 
 ## Single deployment
@@ -51,7 +51,7 @@ docker compose up -d --build
 ## Cutover checklist
 
 1. Point Palo Alto syslog fan-out to **log-intel :5516** only.
-2. Deploy **`syslog-pusher/dist/SyslogPusher.exe`** on Windows hosts (or rebuild from `syslog-pusher/`).
+2. Deploy **`syslog-pusher/dist/SyslogPusher-0.9.1.exe`** on Windows hosts (or rebuild from `syslog-pusher/`).
 3. Point Syslog Pusher destination to the same log-intel syslog port.
 4. Set **`LOG_DIRS`** (or mount `/var/log`) for file-tail if using rsyslog remote files.
 5. Stop separate **syslogb**, **loggy**, **netsyslog**, and standalone **syslogpusher** repos/services.

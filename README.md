@@ -13,7 +13,7 @@ Replaces standalone **syslogb**, **loggy**, **netsyslog**, and **syslogpusher**.
 | File logs | http://host:9088/ |
 | Network hub | http://host:9088/hub |
 | Syslog ingest (Linux hub) | UDP/TCP **514** (or remapped host port, e.g. **5516**) |
-| Windows client | [`syslog-pusher/`](syslog-pusher/) — `dist/SyslogPusher.exe` |
+| Windows client | [`syslog-pusher/`](syslog-pusher/) — `dist/SyslogPusher-0.9.1.exe` |
 
 ## Features
 
@@ -21,9 +21,9 @@ Replaces standalone **syslogb**, **loggy**, **netsyslog**, and **syslogpusher**.
 
 **Network hub (`/hub`)** — Palo Alto + Windows syslog ingest, GeoIP, live feed (optional file/journal failures), **unified search** across hub + files + loggy archive, firewall view, flow map, **LLM analysis** (hourly/trends/on-demand), **unified alerts** (hub + file/journal tail).
 
-**Unified intelligence (v0.5.0)** — cross-source search, multiplex live stream, EventStore schema v2 (`analyses` + `meta_summaries`), runtime `config/sources.yaml`, journal window LLM, single alert engine on `events.sqlite`. Migrate syslogb alert rules: `scripts/migrate-alert-rules.py`.
+**Unified intelligence (v0.9.1)** — cross-source search, multiplex live stream, EventStore schema v2 (`analyses` + `meta_summaries`), runtime `config/sources.yaml`, journal window LLM, single alert engine on `events.sqlite`. Migrate syslogb alert rules: `scripts/migrate-alert-rules.py`.
 
-**Syslog Pusher (Windows)** — [`syslog-pusher/`](syslog-pusher/) forwards Windows event logs and watched log files to the hub (or rsyslog). Pre-built installer: `syslog-pusher/dist/SyslogPusher.exe`.
+**Syslog Pusher (Windows)** — [`syslog-pusher/`](syslog-pusher/) forwards Windows event logs and watched log files to the hub (or rsyslog). Pre-built installer: `syslog-pusher/dist/SyslogPusher-0.9.1.exe`.
 
 ## Requirements
 
@@ -192,7 +192,7 @@ Windows hosts forward event logs and file tails to log-intel via **[syslog-pushe
 
 ### Quick install (Windows)
 
-1. Copy **`syslog-pusher/dist/SyslogPusher.exe`** to the server (or build from source — see [syslog-pusher/README.md](syslog-pusher/README.md)).
+1. Copy **`syslog-pusher/dist/SyslogPusher-0.9.1.exe`** to the server (or build from source — see [syslog-pusher/README.md](syslog-pusher/README.md)).
 2. Run the exe → complete the setup wizard.
 3. Set destination to your log-intel host, e.g. **`192.168.101.115`** port **`5516`** (UDP or TCP).
 
@@ -207,7 +207,7 @@ cd syslog-pusher
 .\scripts\publish.ps1
 ```
 
-Output: `syslog-pusher\dist\SyslogPusher.exe` (single-file, win-x64, self-contained).
+Output: `syslog-pusher\dist\SyslogPusher-0.9.1.exe` (single-file, win-x64, self-contained).
 
 ### Pairing tips
 
@@ -218,7 +218,7 @@ Output: `syslog-pusher\dist\SyslogPusher.exe` (single-file, win-x64, self-contai
 
 ```
 log_intel/           Python app (syslogb UI + network hub)
-syslog-pusher/       Windows client (C#) — source + dist/SyslogPusher.exe
+syslog-pusher/       Windows client (C#) — source + dist/SyslogPusher-0.9.1.exe
 config/              rsyslog drop-in, systemd units
 scripts/             install, migration helpers
 ```
@@ -229,7 +229,7 @@ scripts/             install, migration helpers
 2. `python3 scripts/sync-syslogb-settings.py` — copy your syslogb SQLite settings
 3. Copy `syslogb/data/chroma/` → `log-intel/data/chroma/` if you want existing RAG indices
 4. Point Palo Alto syslog to log-intel port
-5. Deploy Windows clients from `syslog-pusher/dist/SyslogPusher.exe`
+5. Deploy Windows clients from `syslog-pusher/dist/SyslogPusher-0.9.1.exe`
 6. Stop old containers and standalone repos — [DEPRECATION.md](DEPRECATION.md)
 
 ## API

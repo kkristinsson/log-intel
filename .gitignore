@@ -11,7 +11,7 @@ __pycache__/
 .pytest_cache/
 .DS_Store
 
-# syslog-pusher (.NET) build output — keep dist/SyslogPusher.exe tracked
+# syslog-pusher (.NET) build output — keep versioned dist/SyslogPusher-*.exe tracked
 syslog-pusher/**/bin/
 syslog-pusher/**/obj/
 syslog-pusher/**/artifacts/

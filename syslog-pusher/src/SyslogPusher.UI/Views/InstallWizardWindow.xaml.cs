@@ -149,7 +149,7 @@ public partial class InstallWizardWindow : Window
 
             var executablePath = AppPaths.ResolveExecutablePath();
             if (!File.Exists(executablePath))
-                throw new FileNotFoundException("Could not find SyslogPusher.exe.", executablePath);
+                throw new FileNotFoundException("Could not find the Syslog Pusher executable.", executablePath);
 
             WindowsServiceManager.InstallAndStart();
 

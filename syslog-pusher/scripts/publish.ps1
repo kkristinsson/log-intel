@@ -5,7 +5,15 @@ $RuntimeIdentifier = "win-x64"
 
 $root = Split-Path -Parent $PSScriptRoot
 $dist = Join-Path $root "dist"
-$exe = Join-Path $dist "SyslogPusher.exe"
+$propsPath = Join-Path $root "Directory.Build.props"
+$props = [xml](Get-Content $propsPath -Raw)
+$version = [string]($props.Project.PropertyGroup | ForEach-Object { $_.Version } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -First 1)
+if ([string]::IsNullOrWhiteSpace($version)) {
+    throw "Version was not found in $propsPath"
+}
+$assemblyFileVersion = "$version.0"
+$exeName = "SyslogPusher-$version.exe"
+$exe = Join-Path $dist $exeName
 $staging = Join-Path $root "artifacts\publish"
 $serviceName = "SyslogPusher"
 
@@ -76,7 +84,7 @@ function Stop-SyslogPusherBeforePublish {
             $stream.Close()
         }
         catch {
-            Write-Warning "SyslogPusher.exe is locked at '$exe' (is the service or UI still running?)."
+            Write-Warning "$exeName is locked at '$exe' (is the service or UI still running?)."
         }
     }
 }
@@ -98,10 +106,14 @@ $publishArgs = @(
     "-p:IncludeNativeLibrariesForSelfExtract=true",
     "-p:EnableCompressionInSingleFile=true",
     "-p:DebugType=none",
-    "-p:DebugSymbols=false"
+    "-p:DebugSymbols=false",
+    "-p:Version=$version",
+    "-p:AssemblyVersion=$assemblyFileVersion",
+    "-p:FileVersion=$assemblyFileVersion",
+    "-p:InformationalVersion=$version"
 )
 
-Write-Host "Publishing single-file SyslogPusher.exe (self-contained, amd64/x64)..."
+Write-Host "Publishing single-file $exeName (self-contained, amd64/x64)..."
 dotnet publish (Join-Path $root "src\SyslogPusher.Service\SyslogPusher.Service.csproj") @publishArgs
 
 $published = Join-Path $staging "SyslogPusher.exe"
@@ -116,7 +128,7 @@ try {
     Copy-Item $published $exe -Force
 }
 catch {
-    $outputExe = Join-Path $dist "SyslogPusher.new.exe"
+    $outputExe = Join-Path $dist "SyslogPusher-$version.new.exe"
     Copy-Item $published $outputExe -Force
     Write-Warning "Could not overwrite $exe. New build saved as $outputExe"
     Write-Warning "Stop the service, replace the file, then run Upgrade or sc start $serviceName"

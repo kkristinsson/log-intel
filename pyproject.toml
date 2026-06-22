@@ -1,6 +1,6 @@
 [project]
 name = "log-intel"
-version = "0.2.0"
+version = "0.9.1"
 description = "Unified log intelligence — syslogb file UI + network syslog hub"
 readme = "README.md"
 requires-python = ">=3.11"
