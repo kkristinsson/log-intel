@@ -193,7 +193,7 @@
           <li><strong>Embedded in the message</strong> — the real application event time (e.g. <code>[sms.2024-11-05] - 23:32:55.288</code> in <code>Pri.log</code>)</li>
         </ul>
         <p>By default log-intel uses the <strong>leading</strong> timestamp. For known formats, <strong>timestamp parsers</strong> (Settings → Timestamp parsers) extract the embedded date instead — used for sort order, <strong>Time range</strong> filtering, and export.</p>
-        <p>Built-in <strong>SMS Pri logs</strong> is enabled for <code>Pri.log</code>. Lines without a matching embedded date fall back to the leading timestamp. Other filenames are unaffected.</p>
+        <p>Built-in <strong>SMS Pri logs</strong> is enabled for <code>Pri.log</code> and dated ComLink app logs such as <code>ComLinkApp20260503.log</code>. Lines without a matching embedded date fall back to the leading timestamp. Other filenames are unaffected.</p>
         <p>On Windows hosts, enable <strong>Only new</strong> on the relevant syslogpusher directory watch to avoid replaying old file content on service restart.</p>
       </section>
 

@@ -9,6 +9,7 @@ import pytest
 from log_intel.ingest.classifier import classify_and_parse
 from log_intel.parsers.palo_alto import is_palo_alto_message, parse_palo_alto_syslog
 from log_intel.parsers.generic import parse_generic_syslog
+from log_intel.syslogb.app.timestamp_parsers import parse_timestamp_for_source, resolve_timestamp_parser
 
 FIXTURE = Path(__file__).parent / "fixtures" / "pan_sample.syslog"
 
@@ -44,3 +45,30 @@ def test_generic_syslog() -> None:
     assert ev is not None
     assert ev.source_type == "generic"
     assert ev.src_ip == "203.0.113.1"
+
+
+def test_sms_pri_parser_matches_legacy_and_comlink_names() -> None:
+    parsers = [
+        {
+            "name": "SMS Pri logs",
+            "type": "regex",
+            "file_glob": "Pri.log,ComLinkApp*.log",
+            "priority": 15,
+            "enabled": True,
+            "config": {
+                "pattern": (
+                    r"\[sms\.(?P<event_date>\d{4}-\d{2}-\d{2})\]"
+                    r"(?:\s*-\s+(?P<event_time>\d{2}:\d{2}:\d{2}(?:\.\d+)?)\s+\[)?"
+                ),
+                "date_group": "event_date",
+                "time_group": "event_time",
+                "time_default": "00:00:00",
+            },
+        }
+    ]
+    line = "May 18 06:39:49 host Pri [sms.2024-11-05] - 23:32:55.288 [message]"
+
+    assert resolve_timestamp_parser("/var/log/remote/host/Pri.log", parsers) is not None
+    assert resolve_timestamp_parser("/var/log/remote/host/ComLinkApp20260503.log", parsers) is not None
+    assert resolve_timestamp_parser("/var/log/remote/host/WindowsEvents.log", parsers) is None
+    assert parse_timestamp_for_source(line, "/var/log/remote/host/ComLinkApp20260503.log", parsers) is not None

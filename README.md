@@ -212,7 +212,7 @@ Output: `syslog-pusher\dist\SyslogPusher.exe` (single-file, win-x64, self-contai
 ### Pairing tips
 
 - Enable **Only new** on directory watches with large historical logs (e.g. `Pri.log`) to avoid replay bursts after service restart.
-- log-intel includes a built-in **SMS Pri logs** timestamp parser for `Pri.log` — see **Help** on the file logs UI.
+- log-intel includes a built-in **SMS Pri logs** timestamp parser for `Pri.log` and `ComLinkApp*.log` — see **Help** on the file logs UI.
 
 ## Repository layout
 

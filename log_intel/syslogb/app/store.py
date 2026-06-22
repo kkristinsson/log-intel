@@ -250,6 +250,7 @@ class AppStore:
                     self._seed_builtin_columnizers(conn, now)
                 self._upgrade_builtin_columnizers(conn, now)
                 self._seed_builtin_timestamp_parsers(conn, now)
+                self._upgrade_builtin_timestamp_parsers(conn, now)
                 conn.commit()
             finally:
                 conn.close()
@@ -339,6 +340,7 @@ class AppStore:
         )
 
     def _seed_builtin_timestamp_parsers(self, conn: sqlite3.Connection, now: float) -> None:
+        sms_pri_glob = "Pri.log,ComLinkApp*.log"
         sms_pri_cfg = {
             "pattern": (
                 r"\[sms\.(?P<event_date>\d{4}-\d{2}-\d{2})\]"
@@ -349,7 +351,7 @@ class AppStore:
             "time_default": "00:00:00",
         }
         builtins = [
-            ("builtin-sms-pri", "SMS Pri logs", "regex", json.dumps(sms_pri_cfg), "Pri.log", 15),
+            ("builtin-sms-pri", "SMS Pri logs", "regex", json.dumps(sms_pri_cfg), sms_pri_glob, 15),
         ]
         for pid, name, ptype, cfg, glob, pri in builtins:
             conn.execute(
@@ -360,6 +362,16 @@ class AppStore:
                 """,
                 (pid, name, ptype, cfg, glob, pri, now, now),
             )
+
+    def _upgrade_builtin_timestamp_parsers(self, conn: sqlite3.Connection, now: float) -> None:
+        conn.execute(
+            """
+            UPDATE timestamp_parsers
+            SET file_glob=?, updated_at=?
+            WHERE id=? AND file_glob=?
+            """,
+            ("Pri.log,ComLinkApp*.log", now, "builtin-sms-pri", "Pri.log"),
+        )
 
     # --- Settings ---
 
