@@ -64,7 +64,29 @@ public sealed class LogFileCollector : IAsyncDisposable
             if (!ShouldWatchFile(file, watch))
                 continue;
 
+            if (watch.OnlyPushNewEvents)
+            {
+                SeedFilePositionAtEnd(file);
+                continue;
+            }
+
             TailFile(file, watch, initial: true);
+        }
+    }
+
+    private void SeedFilePositionAtEnd(string path)
+    {
+        try
+        {
+            _filePositions[path] = new FileInfo(path).Length;
+        }
+        catch (IOException ex)
+        {
+            _logger.LogDebug(ex, "Could not seed position for {Path}; will read from first observed change", path);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            _logger.LogDebug(ex, "Could not seed position for {Path}; will read from first observed change", path);
         }
     }
 
@@ -112,10 +134,8 @@ public sealed class LogFileCollector : IAsyncDisposable
                 FileShare.ReadWrite | FileShare.Delete);
 
             var startPosition = initial
-                ? (watch.OnlyPushNewEvents
-                    ? stream.Length
-                    : Math.Max(0, stream.Length - watch.TailFromEndBytes))
-                : _filePositions.GetOrAdd(path, stream.Length);
+                ? Math.Max(0, stream.Length - watch.TailFromEndBytes)
+                : (_filePositions.TryGetValue(path, out var position) ? position : 0);
 
             if (startPosition > stream.Length)
                 startPosition = 0;

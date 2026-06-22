@@ -48,7 +48,8 @@ public static class BinaryFileDetector
         }
         catch
         {
-            return true;
+            // Live logs can be briefly locked; do not permanently classify them as binary.
+            return false;
         }
     }
 }
