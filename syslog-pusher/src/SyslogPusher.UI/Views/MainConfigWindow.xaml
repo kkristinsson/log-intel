@@ -66,7 +66,7 @@
                 <DockPanel Margin="8">
                     <TextBlock DockPanel.Dock="Top" TextWrapping="Wrap" Margin="0,0,0,8"
                                Foreground="{StaticResource MutedTextBrush}"
-                               Text="Only new: on service start, skip existing file content for that directory (seek to end of file). Enable for folders with large historical logs (e.g. Pri.log). Other watches are unchanged. Pair with log-intel timestamp parsers on the collector."/>
+                               Text="Only new: on service start, discover existing files but skip existing content for that directory (seek to end of file). Enabled by default for new watches so only appended data is forwarded. Pair with log-intel timestamp parsers on the collector."/>
                     <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,8">
                         <Button Content="Add" Click="OnAddDirectoryWatch"/>
                         <Button Content="Remove" Click="OnRemoveDirectoryWatch" Style="{StaticResource SecondaryButton}"/>

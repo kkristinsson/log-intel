@@ -5,7 +5,7 @@
     <DockPanel Margin="8">
         <StackPanel DockPanel.Dock="Top" Margin="0,0,0,8">
             <TextBlock TextWrapping="Wrap" Margin="0,0,0,8"
-                       Text="Watch directories for log files. Use mode 'All files' to ship every file, or 'Matched files only' with patterns such as *.log. Enable Subdirs to include nested folders. Enable Only new for folders with large historical logs (e.g. Pri.log) to skip existing content on service start."/>
+                       Text="Watch directories for log files. Use mode 'All files' to ship every file, or 'Matched files only' with patterns such as *.log. Enable Subdirs to include nested folders. Only new is enabled by default so existing files are discovered but only appended data is sent."/>
             <StackPanel Orientation="Horizontal">
                 <Button Content="Add folder" Click="OnAdd"/>
                 <Button Content="Remove" Click="OnRemove"/>

@@ -11,7 +11,7 @@ Part of the **[log-intel](../README.md)** monorepo. Syslog Pusher is a Windows s
   - Optional subdirectory recursion
 - Syslog destination: host, port, UDP/TCP, hostname, app name (RFC 5424)
 - **Ignore binary files** by default (configurable sample size)
-- **Only new** (per directory watch) — skip existing file content on service start; forward only lines appended after startup
+- **Only new** (per directory watch, default on) — discover existing files on service start but forward only lines appended after startup
 - First-run **install wizard** and later **configuration UI**
 - Settings stored under `%ProgramData%\SyslogPusher\`
 
@@ -57,15 +57,15 @@ Remove `%ProgramData%\SyslogPusher` if you no longer need the configuration.
 
 ## Only push new events (per directory)
 
-On the **Log directories** tab, each watch has an **Only new** checkbox (default off).
+On the **Log directories** tab, each watch has an **Only new** checkbox (default on for new watches).
 
 When enabled for a directory:
 
 - On service **start**, syslogpusher seeks to the **end** of each matching file in that watch (no replay of the last 64 KB).
 - Only **new lines appended after startup** are forwarded.
-- Other directory watches without the checkbox behave as before.
+- Directory watches without the checkbox replay the recent tail on startup.
 
-Use this for folders with large historical application logs (e.g. `Pri.log`) where the central collector should not receive a burst of old events after every service restart.
+Keep this enabled for folders with large historical application logs (e.g. `Pri.log`) where the central collector should not receive a burst of old events after every service restart.
 
 **Pair with log-intel:** the file logs UI includes a built-in **SMS Pri logs** timestamp parser for `Pri.log` so sort order and time-range filtering use the embedded event date in the message, not the rsyslog receive prefix. See **Help** on http://host:9088/.
 

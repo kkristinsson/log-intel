@@ -40,7 +40,7 @@ public sealed class DirectoryWatchConfig
     public List<string> FilePatterns { get; set; } = ["*.log", "*.txt"];
     public bool IncludeSubdirectories { get; set; }
     public long TailFromEndBytes { get; set; } = 64 * 1024;
-    public bool OnlyPushNewEvents { get; set; }
+    public bool OnlyPushNewEvents { get; set; } = true;
 }
 
 public enum DirectoryWatchMode

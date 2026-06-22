@@ -9,7 +9,7 @@ public sealed class DirectoryWatchRow
     public string Mode { get; set; } = "All files";
     public string PatternsDisplay { get; set; } = "*.log, *.txt";
     public bool IncludeSubdirectories { get; set; }
-    public bool OnlyPushNewEvents { get; set; }
+    public bool OnlyPushNewEvents { get; set; } = true;
 
     public static DirectoryWatchRow FromConfig(DirectoryWatchConfig config) => new()
     {
