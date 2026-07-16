@@ -214,7 +214,7 @@ def hub_stream():
 
     def gen():
         q: qmod.Queue = qmod.Queue(maxsize=200)
-        hub.sync_stream_subscribers.append(q)
+        hub.add_sync_subscriber(q)
         try:
             for ev in list(hub.recent_stream):
                 d = ev.__dict__.copy()
@@ -243,8 +243,7 @@ def hub_stream():
                 if _importance_ok(d):
                     yield f"data: {json.dumps(d)}\n\n"
         finally:
-            if q in hub.sync_stream_subscribers:
-                hub.sync_stream_subscribers.remove(q)
+            hub.remove_sync_subscriber(q)
             if tail_q is not None:
                 try:
                     from log_intel.syslogb.bootstrap import get_runtime

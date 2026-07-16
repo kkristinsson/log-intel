@@ -42,8 +42,7 @@ class JournalTailer:
         )
         self._thread.start()
 
-    def stop(self) -> None:
-        self._stop.set()
+    def _terminate_proc(self) -> None:
         proc = self._proc
         if proc and proc.poll() is None:
             proc.terminate()
@@ -51,8 +50,13 @@ class JournalTailer:
                 proc.wait(timeout=3)
             except subprocess.TimeoutExpired:
                 proc.kill()
-        if self._thread:
-            self._thread.join(timeout=3)
+
+    def stop(self) -> None:
+        self._stop.set()
+        self._terminate_proc()
+        thread = self._thread
+        if thread and thread is not threading.current_thread():
+            thread.join(timeout=3)
 
     def _run(self) -> None:
         cmd = journalctl_argv(self._spec, follow=True)
@@ -70,23 +74,25 @@ class JournalTailer:
 
         assert self._proc.stdout is not None
         logger.info("Journal follow: %s (%s)", self._source, " ".join(cmd))
-        while not self._stop.is_set():
-            line = self._proc.stdout.readline()
-            if not line:
-                if self._proc.poll() is not None:
-                    err = (self._proc.stderr.read() if self._proc.stderr else "")[:300]
-                    logger.warning("journalctl exited for %s: %s", self._source, err)
-                    break
-                time.sleep(0.2)
-                continue
-            line = line.rstrip("\n")
-            if not line:
-                continue
-            received_at = time.time()
-            ts = parse_timestamp(line, received_at, source=self._source)
-            if self._on_raw_line:
-                self._on_raw_line(self._source, line, ts, received_at)
-            if is_failure_line(line):
-                self._on_failure_line(self._source, line, ts, received_at)
-
-        self.stop()
+        try:
+            while not self._stop.is_set():
+                line = self._proc.stdout.readline()
+                if not line:
+                    if self._proc.poll() is not None:
+                        err = (self._proc.stderr.read() if self._proc.stderr else "")[:300]
+                        logger.warning("journalctl exited for %s: %s", self._source, err)
+                        break
+                    time.sleep(0.2)
+                    continue
+                line = line.rstrip("\n")
+                if not line:
+                    continue
+                received_at = time.time()
+                ts = parse_timestamp(line, received_at, source=self._source)
+                if self._on_raw_line:
+                    self._on_raw_line(self._source, line, ts, received_at)
+                if is_failure_line(line):
+                    self._on_failure_line(self._source, line, ts, received_at)
+        finally:
+            self._stop.set()
+            self._terminate_proc()

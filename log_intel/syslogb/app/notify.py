@@ -9,10 +9,8 @@ from email.message import EmailMessage
 from typing import Any
 from urllib.parse import urlparse
 
-import requests
-
 from log_intel.syslogb.app import config
-from log_intel.syslogb.app.security import validate_outbound_webhook_url
+from log_intel.syslogb.app.security import post_json_webhook, validate_outbound_webhook_url
 
 logger = logging.getLogger(__name__)
 
@@ -100,10 +98,8 @@ def send_webhook(url: str, payload: dict[str, Any]) -> tuple[bool, str]:
         return False, err
     body = format_webhook_payload(url, payload)
     try:
-        resp = requests.post(url, json=body, timeout=30)
-        if resp.ok:
-            return True, "sent"
-        return False, resp.text[:500]
+        post_json_webhook(url, body, timeout=30.0)
+        return True, "sent"
     except Exception as e:
         logger.warning("Webhook failed: %s", e)
         return False, str(e)

@@ -5,14 +5,36 @@ from __future__ import annotations
 import csv
 import re
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 
 from log_intel.config import get_palo_indices
 from log_intel.models import LogEvent
 
 RE_PRI = re.compile(r"^<(\d{1,3})>\s*")
 RE_RFC5424 = re.compile(r"^<(\d+)>(\d+)\s")
-RE_IPV4 = re.compile(r"^(?:\d{1,3}\.){3}\d{1,3}$")
+RE_IPV4 = re.compile(
+    r"^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}"
+    r"(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$"
+)
+RE_PAN_DATE = re.compile(r"^\d{4}/\d{2}/\d{2}(?:\s|$)")
+_PAN_LOG_TYPES = frozenset(
+    {
+        "TRAFFIC",
+        "THREAT",
+        "SYSTEM",
+        "CONFIG",
+        "HIPMATCH",
+        "GLOBALPROTECT",
+        "USERID",
+        "AUTH",
+        "CORRELATION",
+        "GATEWAY",
+        "WILDFIRE",
+        "URL",
+        "DATA",
+        "DECRYPTION",
+    }
+)
 
 
 def _parse_pri(raw: str) -> tuple[int | None, int | None]:
@@ -39,11 +61,34 @@ def _rfc3164_message(raw: str) -> str:
 
 
 def _rfc5424_message(raw: str) -> str:
-    marker = " - - - - "
-    idx = raw.find(marker)
-    if idx >= 0:
-        return raw[idx + len(marker) :].strip()
-    return _rfc3164_message(raw)
+    """Extract MSG from RFC5424; supports NIL STRUCTURED-DATA (Palo and Syslog Pusher)."""
+    s = raw.strip()
+    m = RE_RFC5424.match(s)
+    if not m:
+        return _rfc3164_message(raw)
+    rest = s[m.end() :]
+    # TIMESTAMP HOSTNAME APP-NAME PROCID MSGID STRUCTURED-DATA[ MSG]
+    parts = rest.split(None, 5)
+    if len(parts) < 6:
+        # Legacy markers: Palo uses 4 NILs; Syslog Pusher uses APP-NAME + 3 NILs.
+        for marker in (" - - - - ", " - - - "):
+            idx = raw.find(marker)
+            if idx >= 0:
+                return raw[idx + len(marker) :].strip()
+        return _rfc3164_message(raw)
+    sd_and_msg = parts[5]
+    if sd_and_msg == "-":
+        return ""
+    if sd_and_msg.startswith("- "):
+        return sd_and_msg[2:].strip()
+    if sd_and_msg.startswith("["):
+        # Skip one STRUCTURED-DATA element; remainder is MSG (best-effort).
+        close = sd_and_msg.find("] ")
+        if close >= 0:
+            return sd_and_msg[close + 2 :].strip()
+        if sd_and_msg.endswith("]"):
+            return ""
+    return sd_and_msg.strip()
 
 
 def _safe_int(val: str | None) -> int | None:
@@ -63,7 +108,8 @@ def _parse_ts_from_palo(row: list[str], time_col: int = 5) -> float:
         return time.time()
     for fmt in ("%Y/%m/%d %H:%M:%S", "%Y/%m/%d %H:%M:%S.%f"):
         try:
-            return datetime.strptime(tg[:32], fmt).timestamp()
+            # PAN-OS wall times are treated as UTC (common for firewall exports).
+            return datetime.strptime(tg[:32], fmt).replace(tzinfo=timezone.utc).timestamp()
         except ValueError:
             continue
     return time.time()
@@ -150,14 +196,20 @@ def parse_palo_alto_body(
 
 
 def is_palo_alto_message(message: str) -> bool:
-    if "TRAFFIC" in message or "THREAT" in message or "SYSTEM" in message:
-        parts = message.split(",")
-        return len(parts) > 15
-    marker = " - - - - "
-    if marker in message:
-        payload = message[message.find(marker) + len(marker) :]
-        return "TRAFFIC" in payload or "THREAT" in payload or "SYSTEM" in payload
-    return False
+    """True for PAN-OS CSV bodies (type + date in early columns, enough fields)."""
+    body = message.strip()
+    for marker in (" - - - - ", " - - - "):
+        idx = body.find(marker)
+        if idx >= 0:
+            body = body[idx + len(marker) :].strip()
+            break
+    parts = [p.strip() for p in body.split(",")]
+    if len(parts) <= 15:
+        return False
+    early = [p.upper() for p in parts[:8]]
+    if not _PAN_LOG_TYPES.intersection(early):
+        return False
+    return any(RE_PAN_DATE.match(p) for p in parts[:6])
 
 
 def parse_palo_alto_syslog(

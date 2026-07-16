@@ -59,15 +59,18 @@ class FileTailer:
                 pass
             self._fh = None
 
-    def _open_at_end(self) -> bool:
+    def _open(self, *, at_end: bool) -> bool:
         self._close()
         try:
-            fh = open(self._path, "rb")
-            st = fh.fileno()
             import os
-            stat = os.fstat(st)
+
+            fh = open(self._path, "rb")
+            stat = os.fstat(fh.fileno())
             self._inode = stat.st_ino
-            fh.seek(0, 2)
+            if at_end:
+                fh.seek(0, 2)
+            else:
+                fh.seek(0)
             self._offset = fh.tell()
             self._fh = fh
             self._partial = b""
@@ -75,6 +78,12 @@ class FileTailer:
         except OSError as e:
             logger.warning("Cannot open %s: %s", self._path, e)
             return False
+
+    def _open_at_end(self) -> bool:
+        return self._open(at_end=True)
+
+    def _open_at_start(self) -> bool:
+        return self._open(at_end=False)
 
     def _maybe_reopen(self) -> bool:
         import os
@@ -84,12 +93,13 @@ class FileTailer:
             self._close()
             return False
 
+        # File reappeared after missing — treat as new content from the start.
         if self._fh is None:
-            return self._open_at_end()
+            return self._open_at_start()
 
         if st.st_ino != self._inode or st.st_size < self._offset:
             logger.info("Rotation/truncation detected for %s", self._path)
-            return self._open_at_end()
+            return self._open_at_start()
 
         return True
 

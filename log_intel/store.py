@@ -13,11 +13,16 @@ from typing import Any
 from log_intel.models import LogEvent, StreamEvent
 from log_intel.store_loggy import LogStoreMixin, RawLogRow, migrate_schema_v2
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS schema_version (
     version INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS ingest_seen (
+    parser_key TEXT PRIMARY KEY,
+    seen_at REAL NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS events (
@@ -124,28 +129,69 @@ class EventStore(LogStoreMixin):
         self._conn.execute("PRAGMA journal_mode=WAL;")
         self._conn.executescript(SCHEMA)
         migrate_schema_v2(self._conn)
+        self._migrate_ingest_seen()
         cur = self._conn.execute("SELECT version FROM schema_version LIMIT 1")
         row = cur.fetchone()
         if row is None:
             self._conn.execute("INSERT INTO schema_version(version) VALUES (?)", (SCHEMA_VERSION,))
         elif row[0] < SCHEMA_VERSION:
             migrate_schema_v2(self._conn)
+            self._migrate_ingest_seen()
             self._conn.execute("UPDATE schema_version SET version=?", (SCHEMA_VERSION,))
         self._conn.commit()
+
+    def _migrate_ingest_seen(self) -> None:
+        """Ensure ingest_seen exists and backfill Mist keys from live events once."""
+        self._conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS ingest_seen (
+                parser_key TEXT PRIMARY KEY,
+                seen_at REAL NOT NULL
+            )
+            """
+        )
+        n = int(self._conn.execute("SELECT COUNT(*) FROM ingest_seen").fetchone()[0])
+        if n == 0:
+            self._conn.execute(
+                """
+                INSERT OR IGNORE INTO ingest_seen(parser_key, seen_at)
+                SELECT parser, COALESCE(received_at, 0)
+                FROM events
+                WHERE parser LIKE 'mist:%'
+                """
+            )
 
     def close(self) -> None:
         with self._lock:
             self._conn.close()
 
     def has_parser(self, parser: str) -> bool:
+        """True if this ingest key was seen before (survives event prune)."""
         if not parser:
             return False
         with self._lock:
             row = self._conn.execute(
+                "SELECT 1 FROM ingest_seen WHERE parser_key = ? LIMIT 1",
+                (parser,),
+            ).fetchone()
+            if row is not None:
+                return True
+            row = self._conn.execute(
                 "SELECT 1 FROM events WHERE parser = ? LIMIT 1",
                 (parser,),
             ).fetchone()
-        return row is not None
+            return row is not None
+
+    def mark_ingest_seen(self, parser: str, *, seen_at: float | None = None) -> None:
+        if not parser:
+            return
+        ts = time.time() if seen_at is None else seen_at
+        with self._lock:
+            self._conn.execute(
+                "INSERT OR IGNORE INTO ingest_seen(parser_key, seen_at) VALUES (?, ?)",
+                (parser, ts),
+            )
+            self._conn.commit()
 
     def insert(self, ev: LogEvent) -> int:
         row = ev.to_insert_row()
@@ -160,6 +206,11 @@ class EventStore(LogStoreMixin):
                 row,
             )
             eid = int(cur.lastrowid)
+            if ev.parser and ev.parser.startswith("mist:"):
+                self._conn.execute(
+                    "INSERT OR IGNORE INTO ingest_seen(parser_key, seen_at) VALUES (?, ?)",
+                    (ev.parser, ev.received_at or time.time()),
+                )
             self._prune_events_locked()
             self._conn.commit()
             return eid
@@ -183,21 +234,53 @@ class EventStore(LogStoreMixin):
         except Exception:
             floors = {}
 
-        cur = self._conn.execute("SELECT id, source_type FROM events ORDER BY id ASC")
-        deleted = 0
-        for eid, source_type in cur.fetchall():
-            if deleted >= excess:
+        # Floors must not prevent enforcing max_events.
+        floor_budget = max(0, self._max_events - 1)
+        total_floors = sum(floors.values())
+        if total_floors > floor_budget and total_floors > 0:
+            scale = floor_budget / total_floors
+            floors = {k: int(v * scale) for k, v in floors.items()}
+
+        # One-pass counts — avoid per-row COUNT(*) while holding the write lock.
+        counts = {
+            (st or ""): int(n)
+            for st, n in self._conn.execute(
+                "SELECT source_type, COUNT(*) FROM events GROUP BY source_type"
+            )
+        }
+        to_delete: list[int] = []
+        for eid, source_type in self._conn.execute(
+            "SELECT id, source_type FROM events ORDER BY id ASC"
+        ):
+            if len(to_delete) >= excess:
                 break
-            floor = floors.get(source_type or "", 0)
-            if floor > 0:
-                row = self._conn.execute(
-                    "SELECT COUNT(*) FROM events WHERE source_type = ?",
-                    (source_type,),
-                ).fetchone()
-                if row and int(row[0]) <= floor:
+            st = source_type or ""
+            floor = floors.get(st, 0)
+            if floor > 0 and counts.get(st, 0) <= floor:
+                continue
+            to_delete.append(int(eid))
+            counts[st] = counts.get(st, 0) - 1
+
+        if len(to_delete) < excess:
+            protected = set(to_delete)
+            still = excess - len(to_delete)
+            for (eid,) in self._conn.execute(
+                "SELECT id FROM events ORDER BY id ASC"
+            ):
+                if still <= 0:
+                    break
+                eid_i = int(eid)
+                if eid_i in protected:
                     continue
-            self._conn.execute("DELETE FROM events WHERE id = ?", (eid,))
-            deleted += 1
+                to_delete.append(eid_i)
+                protected.add(eid_i)
+                still -= 1
+
+        if to_delete:
+            self._conn.executemany(
+                "DELETE FROM events WHERE id = ?",
+                [(eid,) for eid in to_delete],
+            )
 
     def get_event(self, event_id: int) -> LogEvent | None:
         with self._lock:

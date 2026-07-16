@@ -6,7 +6,11 @@ import time
 
 from log_intel.models import LogEvent
 from log_intel.parsers.generic import is_windows_rfc5424, parse_generic_syslog
-from log_intel.parsers.palo_alto import is_palo_alto_message, parse_palo_alto_syslog
+from log_intel.parsers.palo_alto import (
+    _rfc5424_message,
+    is_palo_alto_message,
+    parse_palo_alto_syslog,
+)
 from log_intel.sources_registry import classify_source_type
 
 
@@ -17,9 +21,7 @@ def classify_and_parse(
     raw_truncate: int,
 ) -> LogEvent | None:
     received_at = time.time()
-    msg_body = raw
-    if " - - - - " in raw:
-        msg_body = raw[raw.find(" - - - - ") + len(" - - - - ") :]
+    msg_body = _rfc5424_message(raw) if raw.lstrip().startswith("<") else raw
 
     if is_palo_alto_message(msg_body) or is_palo_alto_message(raw):
         ev = parse_palo_alto_syslog(raw, peer_ip, transport, received_at, raw_truncate)

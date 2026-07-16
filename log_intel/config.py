@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 from dataclasses import dataclass, field
 from functools import lru_cache
@@ -10,6 +11,8 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from log_intel.syslogb.app.store import AppStore
+
+_log = logging.getLogger(__name__)
 
 
 def _env_bool(key: str, default: bool = False) -> bool:
@@ -23,14 +26,22 @@ def _env_int(key: str, default: int) -> int:
     v = os.environ.get(key)
     if v is None or v.strip() == "":
         return default
-    return int(v)
+    try:
+        return int(v)
+    except ValueError:
+        _log.warning("Invalid integer for %s=%r; using default %s", key, v, default)
+        return default
 
 
 def _env_float(key: str, default: float) -> float:
     v = os.environ.get(key)
     if v is None or v.strip() == "":
         return default
-    return float(v)
+    try:
+        return float(v)
+    except ValueError:
+        _log.warning("Invalid float for %s=%r; using default %s", key, v, default)
+        return default
 
 
 @dataclass(frozen=True)
@@ -55,6 +66,7 @@ class Settings:
     syslog_tcp_host: str = "0.0.0.0"
     syslog_tcp_port: int = 514
     tcp_framing: str = "line"
+    syslog_tcp_max_clients: int = 64
     queue_maxsize: int = 50000
     raw_truncate: int = 2048
     data_dir: str = "./data"
@@ -167,6 +179,7 @@ def _settings_from_env() -> Settings:
         syslog_tcp_host=os.environ.get("LOG_INTEL_SYSLOG_TCP_HOST", "0.0.0.0"),
         syslog_tcp_port=_env_int("LOG_INTEL_SYSLOG_TCP_PORT", 514),
         tcp_framing=os.environ.get("LOG_INTEL_TCP_FRAMING", "line"),
+        syslog_tcp_max_clients=_env_int("LOG_INTEL_SYSLOG_TCP_MAX_CLIENTS", 64),
         queue_maxsize=_env_int("LOG_INTEL_QUEUE_MAXSIZE", 50000),
         raw_truncate=_env_int("LOG_INTEL_RAW_TRUNCATE", 2048),
         data_dir=data_dir,

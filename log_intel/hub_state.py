@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import queue as qmod
+import threading
 from collections import deque
 from dataclasses import dataclass, field
 from typing import Any
@@ -27,18 +28,31 @@ class HubState:
     sync_stream_subscribers: list[qmod.Queue[StreamEvent | None]] = field(default_factory=list)
     recent_stream: deque[StreamEvent] = field(default_factory=lambda: deque(maxlen=500))
     ingest_stats: dict[str, Any] = field(default_factory=lambda: {"queue_drops": 0, "parse_drops": 0})
+    _sse_lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
+
+    def add_sync_subscriber(self, q: qmod.Queue[StreamEvent | None]) -> None:
+        with self._sse_lock:
+            self.sync_stream_subscribers.append(q)
+
+    def remove_sync_subscriber(self, q: qmod.Queue[StreamEvent | None]) -> None:
+        with self._sse_lock:
+            try:
+                self.sync_stream_subscribers.remove(q)
+            except ValueError:
+                pass
 
     def broadcast_sync(self, ev: StreamEvent) -> None:
         self.recent_stream.appendleft(ev)
+        with self._sse_lock:
+            subscribers = list(self.sync_stream_subscribers)
         dead: list[qmod.Queue[StreamEvent | None]] = []
-        for q in self.sync_stream_subscribers:
+        for q in subscribers:
             try:
                 q.put_nowait(ev)
             except qmod.Full:
                 dead.append(q)
         for q in dead:
-            if q in self.sync_stream_subscribers:
-                self.sync_stream_subscribers.remove(q)
+            self.remove_sync_subscriber(q)
 
     def health_snapshot(self) -> dict[str, Any]:
         journal_ok = False

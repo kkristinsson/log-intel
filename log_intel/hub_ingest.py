@@ -19,7 +19,7 @@ from log_intel.metrics import (
     PARSE_OK,
     QUEUE_DEPTH,
 )
-from log_intel.store import importance_for_event, to_stream_event
+from log_intel.store import to_stream_event
 
 if TYPE_CHECKING:
     from log_intel.hub_state import HubState
@@ -28,6 +28,7 @@ log = logging.getLogger(__name__)
 
 _thread: threading.Thread | None = None
 _loop: asyncio.AbstractEventLoop | None = None
+_stop_event: asyncio.Event | None = None
 
 
 def _record_queue_drop(hub: HubState, host: str, transport: str, queue: asyncio.Queue[QueueItem]) -> None:
@@ -79,35 +80,37 @@ async def _retention_loop(hub: HubState) -> None:
 
 
 async def _ingest_main(hub: HubState, geo: GeoLookup) -> None:
+    global _stop_event
     settings = get_settings()
     queue: asyncio.Queue[QueueItem] = asyncio.Queue(maxsize=settings.queue_maxsize)
     on_drop = lambda host, transport: _record_queue_drop(hub, host, transport, queue)
+    stop_event = asyncio.Event()
+    _stop_event = stop_event
     worker = asyncio.create_task(_process_queue(queue, hub, geo))
     ret = (
         asyncio.create_task(_retention_loop(hub))
         if settings.retention_hours > 0
         else None
     )
+    udp = None
+    tcp_srv = None
     try:
-        udp = await serve_udp(queue, settings, on_drop)
-        tcp_srv = await serve_tcp(queue, settings, on_drop)
-    except OSError as e:
-        worker.cancel()
-        if ret:
-            ret.cancel()
-        log.warning(
-            "Hub syslog bind failed on port %s (%s) — HTTP/syslogb still available",
+        try:
+            udp = await serve_udp(queue, settings, on_drop)
+            tcp_srv = await serve_tcp(queue, settings, on_drop)
+        except OSError as e:
+            log.warning(
+                "Hub syslog bind failed on port %s (%s) — HTTP/syslogb still available",
+                settings.syslog_udp_port,
+                e,
+            )
+            return
+        log.info(
+            "Hub syslog ingest UDP/TCP on %s:%s",
+            settings.syslog_udp_host,
             settings.syslog_udp_port,
-            e,
         )
-        return
-    log.info(
-        "Hub syslog ingest UDP/TCP on %s:%s",
-        settings.syslog_udp_host,
-        settings.syslog_udp_port,
-    )
-    try:
-        await asyncio.Event().wait()
+        await stop_event.wait()
     finally:
         worker.cancel()
         try:
@@ -120,9 +123,13 @@ async def _ingest_main(hub: HubState, geo: GeoLookup) -> None:
                 await ret
             except asyncio.CancelledError:
                 pass
-        udp.close()
-        tcp_srv.close()
-        await tcp_srv.wait_closed()
+        if udp is not None:
+            udp.close()
+        if tcp_srv is not None:
+            tcp_srv.close()
+            await tcp_srv.wait_closed()
+        if _stop_event is stop_event:
+            _stop_event = None
 
 
 def _thread_target(hub: HubState, geo: GeoLookup) -> None:
@@ -133,6 +140,12 @@ def _thread_target(hub: HubState, geo: GeoLookup) -> None:
         _loop.run_until_complete(_ingest_main(hub, geo))
     except Exception:
         log.exception("hub ingest thread failed")
+    finally:
+        try:
+            _loop.close()
+        except Exception:
+            pass
+        _loop = None
 
 
 def start_hub_ingest(hub: HubState, geo: GeoLookup) -> None:
@@ -150,8 +163,18 @@ def start_hub_ingest(hub: HubState, geo: GeoLookup) -> None:
 
 
 def stop_hub_ingest() -> None:
-    global _loop, _thread
-    if _loop and _loop.is_running():
-        _loop.call_soon_threadsafe(_loop.stop)
+    global _loop, _thread, _stop_event
+    loop = _loop
+    thread = _thread
+    stop_event = _stop_event
+    if loop is not None and loop.is_running() and stop_event is not None:
+        loop.call_soon_threadsafe(stop_event.set)
+    elif loop is not None and loop.is_running():
+        loop.call_soon_threadsafe(loop.stop)
+    if thread is not None and thread.is_alive():
+        thread.join(timeout=5.0)
+        if thread.is_alive():
+            log.warning("hub ingest thread did not stop within timeout")
     _thread = None
     _loop = None
+    _stop_event = None

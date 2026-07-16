@@ -2,13 +2,10 @@
 
 from __future__ import annotations
 
-import json
 import logging
 from typing import Any
 
-import httpx
-
-from log_intel.syslogb.app.security import validate_outbound_webhook_url
+from log_intel.syslogb.app.security import post_json_webhook, validate_outbound_webhook_url
 
 log = logging.getLogger(__name__)
 
@@ -30,12 +27,10 @@ def deliver_webhook(url: str, payload: dict[str, Any]) -> bool:
                 f"Source: {payload.get('source', '')}\n"
                 f"```\n{payload.get('line', '')[:1800]}\n```"
             )
-            body = {"content": content[:2000]}
+            body: dict[str, Any] = {"content": content[:2000]}
         else:
             body = payload
-        with httpx.Client(timeout=10.0) as client:
-            r = client.post(url, json=body)
-            r.raise_for_status()
+        post_json_webhook(url, body, timeout=10.0)
         return True
     except Exception as e:
         log.warning("webhook delivery failed: %s", e)

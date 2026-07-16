@@ -48,12 +48,14 @@ _KV_BLOCKED_ACTION = re.compile(
 
 
 def _pan_csv_fields(message: str) -> list[str] | None:
-    """Return comma-split PAN CSV fields after the RFC5424 ``- - - -`` marker."""
-    marker = " - - - - "
-    idx = message.find(marker)
-    if idx >= 0:
-        payload = message[idx + len(marker) :].strip()
-    else:
+    """Return comma-split PAN CSV fields after the RFC5424 NIL STRUCTURED-DATA marker."""
+    payload = None
+    for marker in (" - - - - ", " - - - "):
+        idx = message.find(marker)
+        if idx >= 0:
+            payload = message[idx + len(marker) :].strip()
+            break
+    if payload is None:
         m = re.search(r"(?<![0-9])(\d+,\d{4}/\d{2}/\d{2}\s)", message)
         if not m:
             return None

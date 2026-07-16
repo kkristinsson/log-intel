@@ -67,6 +67,7 @@ def build_settings(store: AppStore | None = None) -> Settings:
             syslog_tcp_host=os.environ.get("LOG_INTEL_SYSLOG_TCP_HOST", "0.0.0.0"),
             syslog_tcp_port=_env_int("LOG_INTEL_SYSLOG_TCP_PORT", 514),
             tcp_framing=os.environ.get("LOG_INTEL_TCP_FRAMING", "line"),
+            syslog_tcp_max_clients=_env_int("LOG_INTEL_SYSLOG_TCP_MAX_CLIENTS", 64),
             queue_maxsize=_coerce_from_registry(store, "LOG_INTEL_QUEUE_MAXSIZE", "int", 50000),
             raw_truncate=_coerce_from_registry(store, "LOG_INTEL_RAW_TRUNCATE", "int", 2048),
             data_dir=str(data_dir),

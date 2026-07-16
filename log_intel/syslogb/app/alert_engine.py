@@ -87,9 +87,9 @@ class AlertEngine:
         if log_dir:
             try:
                 base = Path(log_dir).resolve()
-                if not str(path.resolve()).startswith(str(base)):
+                if not path.resolve().is_relative_to(base):
                     return False
-            except OSError:
+            except (OSError, ValueError):
                 return False
         fglob = rule.get("file_glob")
         if fglob and not fnmatch(path.name, fglob):

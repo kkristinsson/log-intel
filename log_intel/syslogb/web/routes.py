@@ -897,7 +897,7 @@ def create_app(
         refresh_all_settings(store)
         refresh_parsers_cache(store.list_timestamp_parsers())
         ok, msg = tail_service.reload()
-        alert_engine.reload_rules()
+        _unified_alert_engine(alert_engine).reload_rules()
         try:
             from log_intel.main import reconfigure_hub_llm_workers, reconfigure_mist_poller
 
@@ -997,7 +997,8 @@ def create_app(
     @app.get("/api/alert-events")
     def api_alert_events():
         limit = request.args.get("limit", 100, type=int)
-        return jsonify({"events": store.list_alert_events(limit=limit)})
+        ustore = _unified_alert_store(store)
+        return jsonify({"events": ustore.list_alert_events(limit=limit)})
 
     @app.get("/api/export")
     def api_export():

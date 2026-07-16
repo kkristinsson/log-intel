@@ -240,14 +240,14 @@ class AlertEngine:
             return all(term in ll for term in q.split())
 
     def _rule_matches_path(self, rule: dict[str, Any], path: Path) -> bool:
-        path_str = str(path)
         log_dir = rule.get("log_dir")
         if log_dir:
             try:
-                base = str(Path(log_dir).resolve())
-                if not path_str.startswith(base) and not path_str.startswith(log_dir):
+                base = Path(log_dir).resolve()
+                resolved = path.resolve()
+                if not resolved.is_relative_to(base):
                     return False
-            except OSError:
+            except (OSError, ValueError):
                 return False
         fglob = rule.get("file_glob")
         if fglob and not fnmatch(path.name, fglob):

@@ -15,6 +15,7 @@ public sealed class LogFileCollector : IAsyncDisposable
     private readonly List<FileSystemWatcher> _watchers = [];
     private readonly ConcurrentDictionary<string, long> _filePositions = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, bool> _binarySkipped = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, object> _fileLocks = new(StringComparer.OrdinalIgnoreCase);
     private readonly CancellationTokenSource _cts = new();
 
     public LogFileCollector(
@@ -125,49 +126,53 @@ public sealed class LogFileCollector : IAsyncDisposable
 
     private void TailFile(string path, DirectoryWatchConfig watch, bool initial)
     {
-        try
+        var gate = _fileLocks.GetOrAdd(path, static _ => new object());
+        lock (gate)
         {
-            using var stream = new FileStream(
-                path,
-                FileMode.Open,
-                FileAccess.Read,
-                FileShare.ReadWrite | FileShare.Delete);
-
-            var startPosition = initial
-                ? Math.Max(0, stream.Length - watch.TailFromEndBytes)
-                : (_filePositions.TryGetValue(path, out var position) ? position : 0);
-
-            if (startPosition > stream.Length)
-                startPosition = 0;
-
-            stream.Seek(startPosition, SeekOrigin.Begin);
-            using var reader = new StreamReader(stream);
-            string? line;
-            while ((line = reader.ReadLine()) is not null)
+            try
             {
-                if (string.IsNullOrWhiteSpace(line))
-                    continue;
+                using var stream = new FileStream(
+                    path,
+                    FileMode.Open,
+                    FileAccess.Read,
+                    FileShare.ReadWrite | FileShare.Delete);
 
-                var message = new SyslogMessage(
-                    UserFacility,
-                    6,
-                    _configuration.Destination.Hostname,
-                    SyslogAppNames.FromLogFilePath(path),
-                    line,
-                    DateTimeOffset.UtcNow);
+                var startPosition = initial
+                    ? Math.Max(0, stream.Length - watch.TailFromEndBytes)
+                    : (_filePositions.TryGetValue(path, out var position) ? position : 0);
 
-                _sender.Enqueue(message);
+                if (startPosition > stream.Length)
+                    startPosition = 0;
+
+                stream.Seek(startPosition, SeekOrigin.Begin);
+                using var reader = new StreamReader(stream);
+                string? line;
+                while ((line = reader.ReadLine()) is not null)
+                {
+                    if (string.IsNullOrWhiteSpace(line))
+                        continue;
+
+                    var message = new SyslogMessage(
+                        UserFacility,
+                        6,
+                        _configuration.Destination.Hostname,
+                        SyslogAppNames.FromLogFilePath(path),
+                        line,
+                        DateTimeOffset.UtcNow);
+
+                    _sender.Enqueue(message);
+                }
+
+                _filePositions[path] = stream.Position;
             }
-
-            _filePositions[path] = stream.Position;
-        }
-        catch (IOException ex)
-        {
-            _logger.LogDebug(ex, "Could not read {Path} yet; will retry on next change", path);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to tail file {Path}", path);
+            catch (IOException ex)
+            {
+                _logger.LogDebug(ex, "Could not read {Path} yet; will retry on next change", path);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to tail file {Path}", path);
+            }
         }
     }
 

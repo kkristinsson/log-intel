@@ -1,10 +1,9 @@
-"""Background LLM analysis worker."""
+"""On-demand LLM analysis worker (automatic batches use ScheduledAnalysisDrain)."""
 
 from __future__ import annotations
 
 import logging
 import threading
-import time
 from typing import TYPE_CHECKING
 
 from log_intel.analysis import ollama_client
@@ -19,54 +18,14 @@ log = logging.getLogger(__name__)
 class AnalysisWorker:
     def __init__(self, store: EventStore) -> None:
         self._store = store
-        self._stop = threading.Event()
-        self._thread: threading.Thread | None = None
 
     def start(self) -> None:
-        if self._thread and self._thread.is_alive():
-            return
-        self._stop.clear()
-        self._thread = threading.Thread(target=self._loop, name="analysis-worker", daemon=True)
-        self._thread.start()
-        log.info("Analysis worker started")
+        # Automatic batch analysis is owned by ScheduledAnalysisDrain.
+        # This worker only serves hub on-demand analyze requests.
+        log.debug("AnalysisWorker ready (on-demand only)")
 
     def stop(self) -> None:
-        self._stop.set()
-
-    def _loop(self) -> None:
-        settings = get_settings()
-        while not self._stop.is_set():
-            if not settings.llm_enabled:
-                self._stop.wait(settings.analysis_interval_sec)
-                continue
-            try:
-                self._run_batch()
-            except Exception:
-                log.exception("analysis worker error")
-            self._stop.wait(settings.analysis_interval_sec)
-
-    def _run_batch(self) -> None:
-        settings = get_settings()
-        events = self._store.unanalyzed_events(limit=settings.analysis_batch_size)
-        if not events:
-            return
-        lines = [e.message for e in events]
-        ids = [e.id for e in events if e.id is not None]
-        job_id = self._store.create_analysis_job("batch", {"event_ids": ids})
-        self._store.update_analysis_job(job_id, status="running")
-        try:
-            result, _raw = ollama_client.analyze_batch(lines)
-            self._store.update_analysis_job(job_id, status="done", result=result)
-            self._store.mark_analyzed(
-                ids,
-                analysis_id=0,
-                severity=str(result.get("severity", "info")),
-                summary=str(result.get("summary", "")),
-            )
-            log.info("Analyzed batch of %s events (job %s)", len(ids), job_id)
-        except Exception as e:
-            self._store.update_analysis_job(job_id, status="failed", error=str(e))
-            log.warning("Batch analysis failed: %s", e)
+        return None
 
     def run_on_demand(self, event_ids: list[int]) -> str:
         settings = get_settings()
@@ -78,18 +37,29 @@ class AnalysisWorker:
                 job_id, status="failed", error="No events found"
             )
             return job_id
-        job_id = self._store.create_analysis_job("on_demand", {"event_ids": event_ids})
+        ids = [e.id for e in events if e.id is not None]
+        job_id = self._store.create_analysis_job("on_demand", {"event_ids": ids})
         self._store.update_analysis_job(job_id, status="running")
 
         def _work() -> None:
             try:
-                result, _ = ollama_client.analyze_batch([e.message for e in events])
-                self._store.update_analysis_job(job_id, status="done", result=result)
-                self._store.mark_analyzed(
-                    event_ids,
-                    analysis_id=0,
+                result, raw = ollama_client.analyze_batch([e.message for e in events])
+                anomalies = result.get("anomalies")
+                if not isinstance(anomalies, list):
+                    anomalies = []
+                aid = self._store.insert_analysis(
+                    ids,
+                    model=settings.ollama_model,
+                    raw_response=raw if isinstance(raw, str) else str(raw or "{}"),
                     severity=str(result.get("severity", "info")),
                     summary=str(result.get("summary", "")),
+                    anomalies=[a for a in anomalies if isinstance(a, dict)],
+                    error=None,
+                )
+                self._store.update_analysis_job(
+                    job_id,
+                    status="done",
+                    result={**result, "analysis_id": aid},
                 )
             except Exception as e:
                 self._store.update_analysis_job(job_id, status="failed", error=str(e))
