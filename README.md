@@ -250,10 +250,25 @@ pytest -q
 | Script | Purpose |
 |--------|---------|
 | `./install.sh` | Full native install (venv, .env, LLM menu, embed server) |
+| `./upgrade.sh` | Upgrade from a GitHub tarball (preserves `.env`, `data/`, `geoip/`, `.venv`) |
 | `scripts/install-ollama-embed.sh` | Local Ollama on :11435 for RAG (auto-run by install.sh) |
 | `scripts/sync-syslogb-settings.py` | Merge syslogb `analyses.db` settings into log-intel |
 | `scripts/migration-status.sh` | Check migration / container health |
 | `scripts/backup-data.sh` | Timestamped backup of `events.sqlite`, `analyses.db`, GeoIP |
+
+### Upgrade (native install)
+
+```bash
+# Optional: snapshot DBs first
+./scripts/backup-data.sh
+
+# Latest GitHub release (falls back to main), or a tag/branch:
+./upgrade.sh
+./upgrade.sh 0.9.2
+./upgrade.sh test/bugfix-hardening
+```
+
+Preserves `.env`, `data/`, `geoip/`, and `.venv`; reinstalls the package with `pip install -e .`; restarts `log-intel.service` when active. Skip restart with `LOG_INTEL_SKIP_RESTART=1`.
 
 ## Compare to syslogb install
 
