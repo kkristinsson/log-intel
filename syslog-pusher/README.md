@@ -28,14 +28,14 @@ cd syslog-pusher
 .\scripts\publish.ps1
 ```
 
-Output is a **single file** named with the release version, for example `dist\SyslogPusher-0.9.1.exe` (self-contained, win-x64). Target machines do not need a separate .NET install.
+Output is a **single file** named with the release version, for example `dist\SyslogPusher-0.9.2.exe` (self-contained, win-x64). Target machines do not need a separate .NET install.
 
 The same executable opens the configuration UI when run interactively, and runs as the Windows service when started by the Service Control Manager (no WPF loaded in service mode).
 
 ## Install
 
-1. Copy **`dist\SyslogPusher-0.9.1.exe`** to the Windows machine (pre-built binary is committed in this repo).
-2. Run **`SyslogPusher-0.9.1.exe`** (first launch opens the setup wizard).
+1. Copy **`dist\SyslogPusher-0.9.2.exe`** to the Windows machine (pre-built binary is committed in this repo).
+2. Run **`SyslogPusher-0.9.2.exe`** (first launch opens the setup wizard).
 3. Set destination to your **log-intel** host (e.g. `192.168.101.115`) and syslog port (default **5516** if using Docker compose port map).
 4. Complete the wizard and click **Install** (elevates to Administrator).
 5. The service is registered, configuration is saved, and forwarding starts.
@@ -79,7 +79,7 @@ src/
   SyslogPusher.Service/   Windows service host
   SyslogPusher.UI/        WPF wizard + configuration app
 dist/
-  SyslogPusher-0.9.1.exe  Pre-built release (win-x64, self-contained)
+  SyslogPusher-0.9.2.exe  Pre-built release (win-x64, self-contained)
 ```
 
 ## License
