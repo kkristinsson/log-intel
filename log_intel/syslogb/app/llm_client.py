@@ -60,7 +60,11 @@ def chat_base_url() -> str:
 
 
 def chat_model_name() -> str:
-    return config.LLM_CHAT_MODEL or config.OLLAMA_MODEL
+    # Provider-specific fields: leftover OpenAI/Berget LLM_CHAT_MODEL must not
+    # override the Ollama model after switching provider in Settings.
+    if uses_remote_chat():
+        return config.LLM_CHAT_MODEL or config.OLLAMA_MODEL
+    return config.OLLAMA_MODEL
 
 
 def embed_model_name() -> str:
