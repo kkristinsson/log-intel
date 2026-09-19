@@ -233,9 +233,14 @@ class AppStore:
         for d in registry():
             conn.execute(
                 """
-                INSERT OR IGNORE INTO settings_meta
+                INSERT INTO settings_meta
                 (key, label, section, description, requires_restart)
                 VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(key) DO UPDATE SET
+                  label=excluded.label,
+                  section=excluded.section,
+                  description=excluded.description,
+                  requires_restart=excluded.requires_restart
                 """,
                 (d.key, d.label, d.section, d.description, 1 if d.requires_restart else 0),
             )

@@ -27,6 +27,8 @@ def test_cf_access_keys_are_secrets() -> None:
     assert defs["CF_ACCESS_CLIENT_ID"].value_type == "secret"
     assert defs["CF_ACCESS_CLIENT_SECRET"].value_type == "secret"
     assert defs["CF_ACCESS_CLIENT_ID"].section == "llm"
+    assert "optional" in defs["CF_ACCESS_CLIENT_ID"].description.lower()
+    assert "optional" in defs["CF_ACCESS_CLIENT_SECRET"].description.lower()
 
 
 def test_store_masks_cf_access_secrets(tmp_path) -> None:
@@ -51,6 +53,28 @@ def test_store_masks_cf_access_secrets(tmp_path) -> None:
     assert llm["CF_ACCESS_CLIENT_SECRET"]["value"] == ""
     assert llm["CF_ACCESS_CLIENT_ID"]["configured"] is True
     assert llm["OLLAMA_BASE_URL"]["value"] == "https://ollama.mpls.se"
+    assert "optional" in llm["CF_ACCESS_CLIENT_ID"]["description"].lower()
+    assert "optional" in llm["CF_ACCESS_CLIENT_SECRET"]["label"].lower()
+
+
+def test_seed_meta_refreshes_optional_descriptions(tmp_path) -> None:
+    from log_intel.syslogb.app.store import AppStore
+
+    store = AppStore(db_path=tmp_path / "analyses.db")
+    store.sync_registry_settings()
+    with store._lock:
+        conn = store._connect()
+        try:
+            conn.execute(
+                "UPDATE settings_meta SET description='old' WHERE key='CF_ACCESS_CLIENT_ID'"
+            )
+            conn.commit()
+        finally:
+            conn.close()
+    store.sync_registry_settings()
+    grouped = store.list_settings_grouped()
+    llm = {item["key"]: item for item in grouped["llm"]}
+    assert "optional" in llm["CF_ACCESS_CLIENT_ID"]["description"].lower()
 
 
 def test_ollama_list_models_sends_cf_headers(monkeypatch) -> None:

@@ -104,10 +104,10 @@
       if (currentProvider === "hybrid") {
         providerActive.textContent =
           "Remote API for chat (OpenAI, Grok/xAI, etc.): set API URL, key, and chat model below. " +
-          "Grok/xAI has no embeddings API — large files use the embed server at OLLAMA_BASE_URL. Cloudflare Access tokens apply to that Ollama URL.";
+          "Grok/xAI has no embeddings API — large files use the embed server at OLLAMA_BASE_URL. Cloudflare Access tokens are optional for that Ollama URL.";
       } else if (currentProvider === "ollama") {
         providerActive.textContent =
-          "Chat and embeddings via Ollama (local or remote). Set OLLAMA_BASE_URL. For Cloudflare Access (e.g. https://ollama.mpls.se), fill in the service-token Client ID and Secret — stored as secrets in SQLite.";
+          "Chat and embeddings via Ollama (local or remote). Set OLLAMA_BASE_URL. Cloudflare Access Client ID and Secret are optional — fill them in only if that URL is behind Access.";
       } else {
         providerActive.textContent =
           "Remote API for chat and embeddings — your provider must support /embeddings.";
