@@ -77,6 +77,8 @@ class Settings:
     reserve_events_palo: int = 0
     geoip_mmdb_path: str = "./geoip/dbip-city-lite.mmdb"
     ollama_base_url: str = "http://127.0.0.1:11434"
+    cf_access_client_id: str = ""
+    cf_access_client_secret: str = ""
     ollama_model: str = "qwen3.6:27b-q8_0"
     ollama_timeout_sec: int = 1200
     ollama_num_predict: int = 768
@@ -192,6 +194,8 @@ def _settings_from_env() -> Settings:
             "LOG_INTEL_GEOIP_MMDB_PATH", "./geoip/dbip-city-lite.mmdb"
         ),
         ollama_base_url=os.environ.get("OLLAMA_BASE_URL", "http://127.0.0.1:11434").rstrip("/"),
+        cf_access_client_id=os.environ.get("CF_ACCESS_CLIENT_ID", ""),
+        cf_access_client_secret=os.environ.get("CF_ACCESS_CLIENT_SECRET", ""),
         ollama_model=os.environ.get("OLLAMA_MODEL", "qwen3.6:27b-q8_0"),
         ollama_timeout_sec=_env_int("OLLAMA_TIMEOUT_SEC", 1200),
         ollama_num_predict=_env_int("OLLAMA_NUM_PREDICT", 768),

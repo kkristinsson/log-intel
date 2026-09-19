@@ -8,6 +8,7 @@ from typing import Any
 
 import requests
 
+from log_intel.ollama_http import cf_access_headers
 from log_intel.syslogb.app import config
 from log_intel.syslogb.app import llm_audit
 
@@ -74,8 +75,19 @@ def _auth_headers() -> dict[str, str]:
     return {}
 
 
+def _ollama_headers() -> dict[str, str]:
+    return cf_access_headers(
+        getattr(config, "CF_ACCESS_CLIENT_ID", ""),
+        getattr(config, "CF_ACCESS_CLIENT_SECRET", ""),
+    )
+
+
 def _ollama_listed_models() -> list[str]:
-    r = requests.get(f"{config.OLLAMA_BASE_URL}/api/tags", timeout=10)
+    r = requests.get(
+        f"{config.OLLAMA_BASE_URL}/api/tags",
+        headers=_ollama_headers(),
+        timeout=10,
+    )
     r.raise_for_status()
     return [m.get("name", "") for m in r.json().get("models", [])]
 
@@ -339,15 +351,17 @@ def _ollama_assistant_text(data: dict[str, Any]) -> str:
 def _chat_ollama(messages: list[dict[str, str]]) -> tuple[str, str, str]:
     model = resolve_chat_model()
     if not model:
+        list_err: Exception | None = None
         try:
             names = _ollama_listed_models()
         except Exception as e:
             names = []
+            list_err = e
         raise RuntimeError(
             f"Chat model {chat_model_name()!r} not found in Ollama. "
             f"Installed: {', '.join(names) or 'none'}. "
-            f"Set OLLAMA_MODEL in .env or run: ollama pull {chat_model_name()}"
-        ) from e
+            f"Set OLLAMA_MODEL in Settings or run: ollama pull {chat_model_name()}"
+        ) from list_err
 
     url = f"{config.OLLAMA_BASE_URL}/api/chat"
     # Thinking models (qwen3) burn tokens on prose; need headroom when JSON mode is off.
@@ -369,7 +383,12 @@ def _chat_ollama(messages: list[dict[str, str]]) -> tuple[str, str, str]:
     else:
         # Ask Ollama to skip chain-of-thought; syslogb prompts already demand JSON only.
         payload["think"] = False
-    resp = requests.post(url, json=payload, timeout=config.OLLAMA_TIMEOUT_SEC)
+    resp = requests.post(
+        url,
+        json=payload,
+        headers=_ollama_headers(),
+        timeout=config.OLLAMA_TIMEOUT_SEC,
+    )
     _raise_for_llm(resp)
     data = resp.json()
     text = _ollama_assistant_text(data)

@@ -10,6 +10,7 @@ import requests
 
 from log_intel import hub_config as hub_cfg
 from log_intel.config import get_settings
+from log_intel.ollama_http import cf_access_headers
 
 SYSTEM_PROMPT = (
     "Unified log triage for syslog from firewalls, Windows hosts, and generic sources. "
@@ -31,6 +32,14 @@ META_SYSTEM_PROMPT = (
     "Caps: headline ≤100 chars; summary ≤420 chars; ≤10 findings; each title ≤70 chars; each detail ≤200 chars. "
     "If evidence is thin, use confidence low and say so in summary."
 )
+
+
+def _headers(settings=None) -> dict[str, str]:
+    s = settings or get_settings()
+    return cf_access_headers(
+        getattr(s, "cf_access_client_id", ""),
+        getattr(s, "cf_access_client_secret", ""),
+    )
 
 
 def _trim_line(s: str, max_chars: int) -> str:
@@ -187,7 +196,12 @@ def analyze_batch(
         think=think,
     )
 
-    resp = requests.post(url, json=payload, timeout=settings.ollama_timeout_sec)
+    resp = requests.post(
+        url,
+        json=payload,
+        headers=_headers(settings),
+        timeout=settings.ollama_timeout_sec,
+    )
     resp.raise_for_status()
     data = resp.json()
     text, raw = _read_model_text(data)
@@ -208,7 +222,12 @@ def meta_summarize(granularity: str, user_content: str) -> tuple[dict[str, Any],
         temperature=0.15,
     )
 
-    resp = requests.post(url, json=payload, timeout=hub_cfg.META_OLLAMA_TIMEOUT_SEC)
+    resp = requests.post(
+        url,
+        json=payload,
+        headers=_headers(settings),
+        timeout=hub_cfg.META_OLLAMA_TIMEOUT_SEC,
+    )
     resp.raise_for_status()
     data = resp.json()
     text, raw = _read_model_text(data)
@@ -222,7 +241,11 @@ def meta_summarize(granularity: str, user_content: str) -> tuple[dict[str, Any],
 def health_check() -> tuple[bool, str]:
     settings = get_settings()
     try:
-        r = requests.get(f"{settings.ollama_base_url}/api/tags", timeout=5)
+        r = requests.get(
+            f"{settings.ollama_base_url}/api/tags",
+            headers=_headers(settings),
+            timeout=5,
+        )
         r.raise_for_status()
         return True, f"Ollama OK at {settings.ollama_base_url}"
     except Exception as e:

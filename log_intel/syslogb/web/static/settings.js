@@ -29,10 +29,12 @@
   const OLLAMA_KEYS = new Set([
     "OLLAMA_BASE_URL", "OLLAMA_MODEL", "OLLAMA_EMBED_MODEL",
     "OLLAMA_TIMEOUT_SEC", "OLLAMA_EMBED_TIMEOUT_SEC", "OLLAMA_NUM_PREDICT", "OLLAMA_JSON_FORMAT",
+    "CF_ACCESS_CLIENT_ID", "CF_ACCESS_CLIENT_SECRET",
   ]);
   const OLLAMA_CHAT_MODEL_KEY = "OLLAMA_MODEL";
   const OLLAMA_EMBED_KEYS = new Set([
     "OLLAMA_BASE_URL", "OLLAMA_EMBED_MODEL", "OLLAMA_EMBED_TIMEOUT_SEC",
+    "CF_ACCESS_CLIENT_ID", "CF_ACCESS_CLIENT_SECRET",
   ]);
   const OPENAI_KEYS = new Set([
     "LLM_API_BASE_URL", "LLM_API_KEY", "LLM_CHAT_MODEL", "LLM_EMBED_MODEL",
@@ -102,10 +104,10 @@
       if (currentProvider === "hybrid") {
         providerActive.textContent =
           "Remote API for chat (OpenAI, Grok/xAI, etc.): set API URL, key, and chat model below. " +
-          "Grok/xAI has no embeddings API — large files use the local embed server at OLLAMA_BASE_URL (install.sh).";
+          "Grok/xAI has no embeddings API — large files use the embed server at OLLAMA_BASE_URL. Cloudflare Access tokens apply to that Ollama URL.";
       } else if (currentProvider === "ollama") {
         providerActive.textContent =
-          "All models run on local Ollama — configure OLLAMA_MODEL and pull models with ollama pull.";
+          "Chat and embeddings via Ollama (local or remote). Set OLLAMA_BASE_URL. For Cloudflare Access (e.g. https://ollama.mpls.se), fill in the service-token Client ID and Secret — stored as secrets in SQLite.";
       } else {
         providerActive.textContent =
           "Remote API for chat and embeddings — your provider must support /embeddings.";

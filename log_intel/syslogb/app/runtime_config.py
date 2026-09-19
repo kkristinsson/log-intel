@@ -116,6 +116,8 @@ def refresh_config_module(store: AppStore) -> None:
     config.EXPORT_MAX_ROWS = _coerce(values.get("EXPORT_MAX_ROWS", "10000"), "int")
     config.LLM_ENABLED = _coerce(values.get("LLM_ENABLED", "1"), "bool")
     config.OLLAMA_BASE_URL = values["OLLAMA_BASE_URL"].rstrip("/")
+    config.CF_ACCESS_CLIENT_ID = values.get("CF_ACCESS_CLIENT_ID", "")
+    config.CF_ACCESS_CLIENT_SECRET = values.get("CF_ACCESS_CLIENT_SECRET", "")
     config.OLLAMA_MODEL = values["OLLAMA_MODEL"]
     config.OLLAMA_EMBED_MODEL = values["OLLAMA_EMBED_MODEL"]
     config.OLLAMA_TIMEOUT_SEC = _coerce(values["OLLAMA_TIMEOUT_SEC"], "int")

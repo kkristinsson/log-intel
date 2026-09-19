@@ -6,6 +6,7 @@ from typing import Any, Callable
 
 import requests
 
+from log_intel.ollama_http import cf_access_headers
 from log_intel.syslogb.app import config
 from log_intel.syslogb.app import llm_audit
 from log_intel.syslogb.app.llm_client import (
@@ -39,6 +40,13 @@ def _ollama_error(resp: requests.Response) -> str:
         return resp.text[:300]
 
 
+def _embed_headers() -> dict[str, str]:
+    return cf_access_headers(
+        getattr(config, "CF_ACCESS_CLIENT_ID", ""),
+        getattr(config, "CF_ACCESS_CLIENT_SECRET", ""),
+    )
+
+
 def _embed_batch_api(model: str, texts: list[str], max_chars: int) -> list[list[float]]:
     url = f"{config.OLLAMA_BASE_URL}/api/embed"
     cleaned = [sanitize_embed_text(t, max_chars) for t in texts]
@@ -49,7 +57,12 @@ def _embed_batch_api(model: str, texts: list[str], max_chars: int) -> list[list[
     t0 = time.perf_counter()
     total_chars = sum(len(t) for t in cleaned)
     try:
-        resp = requests.post(url, json=payload, timeout=config.OLLAMA_EMBED_TIMEOUT_SEC)
+        resp = requests.post(
+            url,
+            json=payload,
+            headers=_embed_headers(),
+            timeout=config.OLLAMA_EMBED_TIMEOUT_SEC,
+        )
         if not resp.ok:
             raise requests.HTTPError(
                 f"{resp.status_code} {_ollama_error(resp)}",
@@ -91,7 +104,12 @@ def _embed_legacy_one(model: str, text: str, max_chars: int) -> list[float]:
         "model": model,
         "prompt": sanitize_embed_text(text, max_chars),
     }
-    resp = requests.post(url, json=payload, timeout=config.OLLAMA_EMBED_TIMEOUT_SEC)
+    resp = requests.post(
+        url,
+        json=payload,
+        headers=_embed_headers(),
+        timeout=config.OLLAMA_EMBED_TIMEOUT_SEC,
+    )
     if not resp.ok:
         raise requests.HTTPError(
             f"{resp.status_code} {_ollama_error(resp)}",
