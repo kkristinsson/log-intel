@@ -67,6 +67,10 @@ When enabled for a directory:
 
 Keep this enabled for folders with large historical application logs (e.g. `Pri.log`) where the central collector should not receive a burst of old events after every service restart.
 
+Daily rolling files (e.g. log4j/logback `ip.%d{yyyy-MM-dd}.log` or `ip.log` → `ip.yyyy-MM-dd.log`) are followed by **file events plus a 2-second poll**. Do not set the match pattern to `ip.*.log` if the live file is `ip.log` — that pattern does not match `ip.log`, so only the rolled archive is forwarded (it will look frozen after midnight). Use `*.log` or list both `ip.log` and `ip.*.log`.
+
+rsyslog **MODE C** (`/var/log/remote/<host>/<programname>.log`) names the remote file from the Windows **filename** (minus `.log`). A live file `ip.2026-09-28.log` therefore becomes `ip.2026-09-28.log` on the collector. rsyslog itself does not date-rotate those dynafiles; `/etc/logrotate.d/rsyslog` only covers local `/var/log/syslog` etc.
+
 **Pair with log-intel:** the file logs UI includes a built-in **SMS Pri logs** timestamp parser for `Pri.log` so sort order and time-range filtering use the embedded event date in the message, not the rsyslog receive prefix. See **Help** on http://host:9088/.
 
 Windows **event logs** use a separate startup grace window (default 5 minutes) to ignore events older than service start minus grace.

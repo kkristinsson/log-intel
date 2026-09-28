@@ -9,14 +9,19 @@ namespace SyslogPusher.Core.Collectors;
 public sealed class LogFileCollector : IAsyncDisposable
 {
     private const int UserFacility = 1;
+    private const int PollIntervalMs = 2000;
+    private const int WatcherBufferSize = 64 * 1024;
+
     private readonly AppConfiguration _configuration;
     private readonly SyslogSender _sender;
     private readonly ILogger<LogFileCollector> _logger;
-    private readonly List<FileSystemWatcher> _watchers = [];
+    private readonly List<(FileSystemWatcher Watcher, DirectoryWatchConfig Watch)> _watchers = [];
     private readonly ConcurrentDictionary<string, long> _filePositions = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, bool> _binarySkipped = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, object> _fileLocks = new(StringComparer.OrdinalIgnoreCase);
+    private readonly object _watcherLock = new();
     private readonly CancellationTokenSource _cts = new();
+    private Task? _pollTask;
 
     public LogFileCollector(
         AppConfiguration configuration,
@@ -39,21 +44,121 @@ public sealed class LogFileCollector : IAsyncDisposable
             }
 
             SeedExistingFiles(watch);
-
-            var watcher = new FileSystemWatcher(watch.Path)
-            {
-                IncludeSubdirectories = watch.IncludeSubdirectories,
-                NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite | NotifyFilters.Size,
-                Filter = "*",
-                EnableRaisingEvents = true
-            };
-
-            watcher.Changed += (_, args) => OnFileEvent(args.FullPath, watch);
-            watcher.Created += (_, args) => OnFileEvent(args.FullPath, watch);
-            watcher.Renamed += (_, args) => OnFileEvent(args.FullPath, watch);
-
-            _watchers.Add(watcher);
+            AttachWatcher(watch);
             _logger.LogInformation("Watching directory {Path}", watch.Path);
+        }
+
+        _pollTask = Task.Run(() => PollLoopAsync(_cts.Token));
+    }
+
+    private void AttachWatcher(DirectoryWatchConfig watch)
+    {
+        var watcher = CreateWatcher(watch);
+        lock (_watcherLock)
+            _watchers.Add((watcher, watch));
+    }
+
+    private FileSystemWatcher CreateWatcher(DirectoryWatchConfig watch)
+    {
+        var watcher = new FileSystemWatcher(watch.Path)
+        {
+            IncludeSubdirectories = watch.IncludeSubdirectories,
+            NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite | NotifyFilters.Size | NotifyFilters.CreationTime,
+            Filter = "*",
+            InternalBufferSize = WatcherBufferSize,
+            EnableRaisingEvents = true
+        };
+
+        watcher.Changed += (_, args) => OnFileEvent(args.FullPath, watch);
+        watcher.Created += (_, args) => OnFileEvent(args.FullPath, watch);
+        watcher.Renamed += (_, args) =>
+        {
+            // Archive (new name) plus the replacement file that often appears at the old path (ip.log).
+            OnFileEvent(args.FullPath, watch);
+            OnFileEvent(args.OldFullPath, watch);
+        };
+        watcher.Error += (_, args) =>
+        {
+            _logger.LogWarning(args.GetException(),
+                "File watcher overflow/error on {Path}; recreating watcher and scanning", watch.Path);
+            RecreateWatcher(watcher, watch);
+            ScanWatch(watch);
+        };
+
+        return watcher;
+    }
+
+    private void RecreateWatcher(FileSystemWatcher oldWatcher, DirectoryWatchConfig watch)
+    {
+        lock (_watcherLock)
+        {
+            _watchers.RemoveAll(entry => ReferenceEquals(entry.Watcher, oldWatcher));
+            try
+            {
+                oldWatcher.EnableRaisingEvents = false;
+                oldWatcher.Dispose();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Failed disposing broken watcher for {Path}", watch.Path);
+            }
+
+            try
+            {
+                var replacement = CreateWatcher(watch);
+                _watchers.Add((replacement, watch));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Could not recreate file watcher for {Path}", watch.Path);
+            }
+        }
+    }
+
+    private async Task PollLoopAsync(CancellationToken cancellationToken)
+    {
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            try
+            {
+                await Task.Delay(PollIntervalMs, cancellationToken).ConfigureAwait(false);
+                foreach (var watch in _configuration.DirectoryWatches.Where(w => w.Enabled))
+                    ScanWatch(watch);
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Log directory poll failed; will retry");
+            }
+        }
+    }
+
+    private void ScanWatch(DirectoryWatchConfig watch)
+    {
+        if (string.IsNullOrWhiteSpace(watch.Path) || !Directory.Exists(watch.Path))
+            return;
+
+        var option = watch.IncludeSubdirectories ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
+        IEnumerable<string> files;
+        try
+        {
+            files = Directory.EnumerateFiles(watch.Path, "*", option);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Could not enumerate {Path}", watch.Path);
+            return;
+        }
+
+        foreach (var file in files)
+        {
+            if (!ShouldWatchFile(file, watch))
+                continue;
+
+            TailFile(file, watch, initial: false);
         }
     }
 
@@ -141,11 +246,18 @@ public sealed class LogFileCollector : IAsyncDisposable
                     ? Math.Max(0, stream.Length - watch.TailFromEndBytes)
                     : (_filePositions.TryGetValue(path, out var position) ? position : 0);
 
+                // Truncation, log4j recreate, or a new file reused the old path after rotate.
                 if (startPosition > stream.Length)
                     startPosition = 0;
 
+                if (startPosition == stream.Length)
+                {
+                    _filePositions[path] = stream.Length;
+                    return;
+                }
+
                 stream.Seek(startPosition, SeekOrigin.Begin);
-                using var reader = new StreamReader(stream);
+                using var reader = new StreamReader(stream, detectEncodingFromByteOrderMarks: true);
                 string? line;
                 while ((line = reader.ReadLine()) is not null)
                 {
@@ -176,17 +288,31 @@ public sealed class LogFileCollector : IAsyncDisposable
         }
     }
 
-    public ValueTask DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         _cts.Cancel();
-        foreach (var watcher in _watchers)
+        if (_pollTask is not null)
         {
-            watcher.EnableRaisingEvents = false;
-            watcher.Dispose();
+            try
+            {
+                await _pollTask.ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+            }
         }
 
-        _watchers.Clear();
+        lock (_watcherLock)
+        {
+            foreach (var (watcher, _) in _watchers)
+            {
+                watcher.EnableRaisingEvents = false;
+                watcher.Dispose();
+            }
+
+            _watchers.Clear();
+        }
+
         _cts.Dispose();
-        return ValueTask.CompletedTask;
     }
 }
