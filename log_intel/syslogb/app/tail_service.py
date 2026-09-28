@@ -4,6 +4,7 @@ import json
 import logging
 import queue
 import threading
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -82,6 +83,8 @@ class TailService:
         self._alert_engine = alert_engine
         self._journal_ok = False
         self._journal_msg = ""
+        self._files_cache: list[dict] | None = None
+        self._files_cache_at = 0.0
 
         self._buffer.subscribe(self._broadcast_event)
 
@@ -123,6 +126,14 @@ class TailService:
             if q in self._sse_queues:
                 self._sse_queues.remove(q)
 
+    def _want_failures(self) -> bool:
+        with self._sse_lock:
+            return bool(self._sse_queues)
+
+    def _want_raw_lines(self) -> bool:
+        engine = self._alert_engine
+        return bool(engine and engine.has_rules())
+
     def _start_tailer(self, path: Path) -> None:
         with self._lock:
             if path in self._tailers:
@@ -131,6 +142,8 @@ class TailService:
                 path,
                 self._on_failure_line,
                 on_raw_line=self._on_raw_line,
+                want_failures=self._want_failures,
+                want_raw=self._want_raw_lines,
             )
             self._tailers[path] = tailer
             tailer.start()
@@ -150,7 +163,13 @@ class TailService:
         for spec in list_journal_sources():
             if spec.uri in self._journal_tailers:
                 continue
-            tailer = JournalTailer(spec, self._on_failure_line, on_raw_line=self._on_raw_line)
+            tailer = JournalTailer(
+                spec,
+                self._on_failure_line,
+                on_raw_line=self._on_raw_line,
+                want_failures=self._want_failures,
+                want_raw=self._want_raw_lines,
+            )
             self._journal_tailers[spec.uri] = tailer
             tailer.start()
         logger.info("Journal tail started (%s sources)", len(self._journal_tailers))
@@ -196,9 +215,16 @@ class TailService:
         self.stop()
         self._buffer = MergeBuffer(config.TAIL_BUFFER_SIZE)
         self._buffer.subscribe(self._broadcast_event)
+        self._files_cache = None
+        self._files_cache_at = 0.0
         return self.start()
 
     def watched_files(self) -> list[dict]:
+        now = time.time()
+        with self._lock:
+            if self._files_cache is not None and now - self._files_cache_at < 2.0:
+                return self._files_cache
+
         watched: set[Path] = set()
         if self._scanner:
             watched = self._scanner.active_files
@@ -247,6 +273,9 @@ class TailService:
                 e.get("name", "").lower(),
             )
         )
+        with self._lock:
+            self._files_cache = entries
+            self._files_cache_at = time.time()
         return entries
 
     def log_groups(self) -> list[dict]:

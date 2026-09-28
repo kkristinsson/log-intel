@@ -215,6 +215,7 @@ body:has(.layout) {
 
 .badge.ok { color: var(--ok); border-color: var(--ok); }
 .badge.err { color: var(--err); border-color: var(--err); }
+.badge.pending { color: var(--muted); }
 
 .layout {
   display: grid;

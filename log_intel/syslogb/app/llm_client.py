@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import threading
 import time
 from typing import Any
 
@@ -683,7 +684,25 @@ def _check_ollama_embed() -> tuple[bool, str]:
     )
 
 
-def health_check() -> tuple[bool, str]:
+_HEALTH_TTL_SEC = 30.0
+_health_lock = threading.Lock()
+_health_cache: tuple[float, tuple[bool, str]] | None = None
+
+
+def health_check(*, force: bool = False) -> tuple[bool, str]:
+    global _health_cache
+    if not force:
+        now = time.time()
+        with _health_lock:
+            if _health_cache and now - _health_cache[0] < _HEALTH_TTL_SEC:
+                return _health_cache[1]
+    result = _health_check_uncached()
+    with _health_lock:
+        _health_cache = (time.time(), result)
+    return result
+
+
+def _health_check_uncached() -> tuple[bool, str]:
     if not llm_enabled():
         return False, "LLM disabled in settings"
 

@@ -21,11 +21,15 @@ class JournalTailer:
         spec: JournalSpec,
         on_failure_line: Callable[[str, str, Optional[float], float], None],
         on_raw_line: Callable[[str, str, Optional[float], float], None] | None = None,
+        want_failures: Callable[[], bool] | None = None,
+        want_raw: Callable[[], bool] | None = None,
     ) -> None:
         self._spec = spec
         self._source = spec.uri
         self._on_failure_line = on_failure_line
         self._on_raw_line = on_raw_line
+        self._want_failures = want_failures
+        self._want_raw = want_raw
         self._stop = threading.Event()
         self._thread: Optional[threading.Thread] = None
         self._proc: subprocess.Popen[str] | None = None
@@ -87,11 +91,19 @@ class JournalTailer:
                 line = line.rstrip("\n")
                 if not line:
                     continue
+                want_raw = bool(self._on_raw_line) and (
+                    self._want_raw is None or self._want_raw()
+                )
+                classify = self._want_failures is None or self._want_failures()
+                if not want_raw and not classify:
+                    continue
                 received_at = time.time()
-                ts = parse_timestamp(line, received_at, source=self._source)
-                if self._on_raw_line:
-                    self._on_raw_line(self._source, line, ts, received_at)
+                if want_raw:
+                    self._on_raw_line(self._source, line, None, received_at)
+                if not classify:
+                    continue
                 if is_failure_line(line):
+                    ts = parse_timestamp(line, received_at, source=self._source)
                     self._on_failure_line(self._source, line, ts, received_at)
         finally:
             self._stop.set()

@@ -19,6 +19,11 @@ _BINARY_SAMPLE_BYTES = 8192
 # Bytes below this ratio of printable ASCII + tab/LF/CR → treat as binary.
 _BINARY_MIN_TEXT_RATIO = 0.85
 
+# path -> (mtime_ns, size, is_binary)
+_binary_cache: dict[str, tuple[int, int, bool]] = {}
+_binary_cache_lock = threading.Lock()
+_BINARY_CACHE_MAX = 20000
+
 
 def is_compressed(path: Path) -> bool:
     name = path.name.lower()
@@ -49,22 +54,42 @@ def is_skipped_name(path: Path) -> bool:
 def is_probably_binary(path: Path) -> bool:
     """Heuristic: NUL bytes or mostly non-text in the file head → not a text log."""
     try:
-        size = path.stat().st_size
+        st = path.stat()
+        size = st.st_size
+        mtime_ns = getattr(st, "st_mtime_ns", int(st.st_mtime * 1e9))
     except OSError:
         return True
+    key = str(path)
+    with _binary_cache_lock:
+        cached = _binary_cache.get(key)
+        if cached:
+            cached_mtime, cached_size, cached_binary = cached
+            if cached_mtime == mtime_ns and cached_size == size:
+                return cached_binary
+            # Same path grew: keep the previous text/binary verdict without re-reading.
+            if size >= cached_size:
+                _binary_cache[key] = (mtime_ns, size, cached_binary)
+                return cached_binary
     if size == 0:
-        return False
-    try:
-        with open(path, "rb") as f:
-            chunk = f.read(min(size, _BINARY_SAMPLE_BYTES))
-    except OSError:
-        return True
-    if not chunk:
-        return False
-    if b"\x00" in chunk:
-        return True
-    text = sum(1 for b in chunk if b in (9, 10, 13) or 32 <= b < 127)
-    return (text / len(chunk)) < _BINARY_MIN_TEXT_RATIO
+        binary = False
+    else:
+        try:
+            with open(path, "rb") as f:
+                chunk = f.read(min(size, _BINARY_SAMPLE_BYTES))
+        except OSError:
+            return True
+        if not chunk:
+            binary = False
+        elif b"\x00" in chunk:
+            binary = True
+        else:
+            text = sum(1 for b in chunk if b in (9, 10, 13) or 32 <= b < 127)
+            binary = (text / len(chunk)) < _BINARY_MIN_TEXT_RATIO
+    with _binary_cache_lock:
+        if len(_binary_cache) >= _BINARY_CACHE_MAX:
+            _binary_cache.clear()
+        _binary_cache[key] = (mtime_ns, size, binary)
+    return binary
 
 
 def should_skip_file(path: Path) -> bool:

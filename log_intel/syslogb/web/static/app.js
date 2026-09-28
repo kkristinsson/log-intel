@@ -15,6 +15,7 @@
   const sidebarGroupsHint = document.getElementById("sidebar-groups-hint");
   const sortOrder = document.getElementById("sort-order");
   const pauseBtn = document.getElementById("pause-btn");
+  const liveFailuresBtn = document.getElementById("live-failures-btn");
   const streamStatus = document.getElementById("stream-status");
   const viewLabel = document.getElementById("view-label");
   const analyzeBtn = document.getElementById("analyze-btn");
@@ -109,6 +110,13 @@
   let paused = false;
   let searchActive = false;
   let es = null;
+  const LIVE_FAILURES_KEY = "logIntel.liveFailures";
+  let liveFailuresOn = false;
+  try {
+    liveFailuresOn = window.localStorage.getItem(LIVE_FAILURES_KEY) === "1";
+  } catch (_) {
+    liveFailuresOn = false;
+  }
   let pollTimer = null;
   let lastSearchQuery = "";
   let lastSearchMode = "text";
@@ -1947,6 +1955,46 @@
     }
   }
 
+  function updateLiveFailuresBtn() {
+    if (!liveFailuresBtn) return;
+    liveFailuresBtn.classList.toggle("active", liveFailuresOn);
+    liveFailuresBtn.setAttribute("aria-pressed", liveFailuresOn ? "true" : "false");
+  }
+
+  function maybeConnectAllFilesStream() {
+    if (searchActive || filterPath) return;
+    if (!liveFailuresOn) {
+      stopLive();
+      showSingleView();
+      clearFeed(feedSingle);
+      fileViewport = null;
+      updatePagingUi();
+      viewLabel.textContent = "All files";
+      viewLabel.dataset.baseLabel = viewLabel.textContent;
+      streamStatus.textContent = "Live failures off — open a file or click Live failures";
+      return;
+    }
+    viewLabel.textContent = "All files (failures only)";
+    viewLabel.dataset.baseLabel = viewLabel.textContent;
+    connectStream();
+  }
+
+  async function refreshLlmBadge() {
+    const el = document.getElementById("ollama-status");
+    if (!el || !llmEnabled) return;
+    try {
+      const res = await fetch("/api/health");
+      const data = await res.json();
+      el.classList.remove("ok", "err", "pending");
+      el.classList.add(data.ollama_ok ? "ok" : "err");
+      el.title = data.ollama_msg || "";
+    } catch (e) {
+      el.classList.remove("ok", "pending");
+      el.classList.add("err");
+      el.title = String(e.message || e);
+    }
+  }
+
   function connectStream() {
     if (searchActive) return;
     stopLive();
@@ -2120,7 +2168,7 @@
       selectFile(filterPath, basename(filterPath), true);
     } else {
       viewLabel.textContent = "All files (failures only)";
-      connectStream();
+      maybeConnectAllFilesStream();
     }
   }
 
@@ -2369,7 +2417,7 @@
     } else {
       viewLabel.textContent = "All files (failures only)";
       viewLabel.dataset.baseLabel = viewLabel.textContent;
-      connectStream();
+      maybeConnectAllFilesStream();
     }
     syncSidebarSelection();
     updateSelectedFileScopeOption();
@@ -2438,7 +2486,7 @@
     if (!path) {
       fileViewport = null;
       updatePagingUi();
-      connectStream();
+      maybeConnectAllFilesStream();
       return;
     }
 
@@ -2663,7 +2711,7 @@
       await loadFilePage(filterPath, { direction: "tail", replace: true });
     } else {
       clearFeed(feedSingle);
-      connectStream();
+      maybeConnectAllFilesStream();
     }
   });
 
@@ -2734,7 +2782,7 @@
       } else if (filterPath) {
         await loadFilePage(filterPath, { direction: "tail", replace: true });
       } else {
-        connectStream();
+        maybeConnectAllFilesStream();
       }
     });
   }
@@ -2811,8 +2859,28 @@
   });
 
   updateTimeWindowUi();
+  updateLiveFailuresBtn();
+  if (liveFailuresBtn) {
+    liveFailuresBtn.addEventListener("click", () => {
+      liveFailuresOn = !liveFailuresOn;
+      try {
+        window.localStorage.setItem(LIVE_FAILURES_KEY, liveFailuresOn ? "1" : "0");
+      } catch (_) { /* ignore quota / private mode */ }
+      updateLiveFailuresBtn();
+      if (!searchActive && !filterPath) {
+        maybeConnectAllFilesStream();
+      }
+    });
+  }
   loadFiles();
-  connectStream();
-  setInterval(loadFiles, 10000);
-  if (llmEnabled) refreshAnalysisHistory();
+  if (liveFailuresOn) {
+    maybeConnectAllFilesStream();
+  } else {
+    streamStatus.textContent = "Select a log file";
+  }
+  setInterval(loadFiles, 30000);
+  if (llmEnabled) {
+    refreshLlmBadge();
+    refreshAnalysisHistory();
+  }
 })();

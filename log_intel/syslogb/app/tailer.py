@@ -6,12 +6,14 @@ import time
 from pathlib import Path
 from typing import Callable, Optional
 
+from log_intel.syslogb.app import config
 from log_intel.syslogb.app.fail_filter import is_failure_line
 from log_intel.syslogb.app.parser import parse_timestamp
 
 logger = logging.getLogger(__name__)
 
-POLL_INTERVAL_SEC = 0.25
+# Kept for tests / callers that imported the old constant.
+POLL_INTERVAL_SEC = 1.0
 
 
 class FileTailer:
@@ -22,10 +24,18 @@ class FileTailer:
         path: Path,
         on_failure_line: Callable[[str, str, Optional[float], float], None],
         on_raw_line: Callable[[str, str, Optional[float], float], None] | None = None,
+        want_failures: Callable[[], bool] | None = None,
+        want_raw: Callable[[], bool] | None = None,
+        poll_interval_sec: float | None = None,
     ) -> None:
         self._path = path
         self._on_failure_line = on_failure_line
         self._on_raw_line = on_raw_line
+        self._want_failures = want_failures
+        self._want_raw = want_raw
+        self._poll_interval_sec = (
+            poll_interval_sec if poll_interval_sec is not None else config.TAIL_POLL_INTERVAL_SEC
+        )
         self._stop = threading.Event()
         self._thread: Optional[threading.Thread] = None
         self._inode: Optional[int] = None
@@ -109,7 +119,7 @@ class FileTailer:
         source = str(self._path)
         while not self._stop.is_set():
             if not self._maybe_reopen():
-                self._stop.wait(POLL_INTERVAL_SEC)
+                self._stop.wait(self._poll_interval_sec)
                 continue
 
             assert self._fh is not None
@@ -119,11 +129,11 @@ class FileTailer:
             except OSError as e:
                 logger.warning("Read error %s: %s", self._path, e)
                 self._close()
-                self._stop.wait(POLL_INTERVAL_SEC)
+                self._stop.wait(self._poll_interval_sec)
                 continue
 
             if not chunk:
-                self._stop.wait(POLL_INTERVAL_SEC)
+                self._stop.wait(self._poll_interval_sec)
                 continue
 
             self._offset += len(chunk)
@@ -131,16 +141,25 @@ class FileTailer:
             lines = data.split(b"\n")
             self._partial = lines.pop()
 
+            want_raw = bool(self._on_raw_line) and (
+                self._want_raw is None or self._want_raw()
+            )
+            classify = self._want_failures is None or self._want_failures()
+            if not want_raw and not classify:
+                continue
+
             now = time.time()
             for raw in lines:
                 line = raw.decode("utf-8", errors="replace").rstrip("\r")
                 if not line:
                     continue
-                ts = parse_timestamp(line, now, source=source)
-                if self._on_raw_line:
-                    self._on_raw_line(source, line, ts, now)
+                if want_raw:
+                    self._on_raw_line(source, line, None, now)
+                if not classify:
+                    continue
                 if not is_failure_line(line):
                     continue
+                ts = parse_timestamp(line, now, source=source)
                 self._on_failure_line(source, line, ts, now)
 
         self._close()

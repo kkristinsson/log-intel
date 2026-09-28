@@ -272,13 +272,10 @@ def create_app(
     def index():
         if not is_setup_complete(store):
             return redirect(url_for("settings_page", setup=1))
-        ok, ollama_msg = health_check()
         return render_template(
             "index.html",
             log_dirs=[str(d) for d in log_dirs()],
             default_order=config.TAIL_DEFAULT_ORDER,
-            ollama_ok=ok,
-            ollama_msg=ollama_msg,
             llm_provider=config.LLM_PROVIDER,
             llm_chat_model=chat_model_name(),
             llm_embed_model=embed_model_name(),

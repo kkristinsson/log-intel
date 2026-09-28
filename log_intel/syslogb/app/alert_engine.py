@@ -34,6 +34,9 @@ class AlertEngine:
         with self._lock:
             self._rules = [r for r in self._store.list_alert_rules() if r.get("enabled")]
 
+    def has_rules(self) -> bool:
+        return bool(self._rules)
+
     def on_line(
         self,
         source: str,

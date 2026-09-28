@@ -107,6 +107,7 @@ def refresh_config_module(store: AppStore) -> None:
     config.LOG_RECURSIVE = _coerce(values["LOG_RECURSIVE"], "bool")
     config.LOG_READ_COMPRESSED = _coerce(values.get("LOG_READ_COMPRESSED", "0"), "bool")
     config.SCAN_INTERVAL_SEC = _coerce(values["SCAN_INTERVAL_SEC"], "float")
+    config.TAIL_POLL_INTERVAL_SEC = _coerce(values.get("TAIL_POLL_INTERVAL_SEC", "1"), "float")
     config.TAIL_BUFFER_SIZE = _coerce(values["TAIL_BUFFER_SIZE"], "int")
     config.TAIL_DEFAULT_ORDER = values["TAIL_DEFAULT_ORDER"].lower()
     config.FILE_RECENT_BYTES = _coerce(values["FILE_RECENT_BYTES"], "int")
