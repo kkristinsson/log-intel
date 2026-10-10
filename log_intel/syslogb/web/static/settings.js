@@ -7,6 +7,8 @@
   const tsParserList = document.getElementById("timestamp-parsers-list");
   let timestampParsersCache = [];
   const rulesList = document.getElementById("alert-rules-list");
+  let alertRulesCache = [];
+  let editingRuleId = null;
   const providerCards = document.getElementById("llm-provider-cards");
   const providerActive = document.getElementById("llm-provider-active");
   const providerPanel = document.getElementById("llm-provider-panel");
@@ -54,7 +56,8 @@
     return String(s)
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;");
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
   }
 
   function isFieldVisible(key) {
@@ -326,28 +329,167 @@
     });
   }
 
-  async function loadRules() {
-    const res = await fetch("/api/alert-rules");
-    const data = await res.json();
-    rulesList.innerHTML = (data.rules || []).map((r) => `
-      <div class="alert-rule-card">
-        <strong>${esc(r.name)}</strong> · ${esc(r.query)} · ${r.enabled ? "on" : "off"}
-        <button data-test-rule="${esc(r.id)}" class="btn btn-link" type="button">Test</button>
-        <button data-del-rule="${esc(r.id)}" class="btn btn-link" type="button">Delete</button>
-      </div>
-    `).join("");
+  function alertRuleMeta(r) {
+    const rows = [
+      ["Query", r.query || ""],
+      ["Mode", r.mode || "text"],
+      ["Scope", r.scope || "all"],
+      ["Cooldown", `${r.cooldown_sec ?? 300}s`],
+      ["Email", r.email_to || ""],
+      ["Webhook", r.webhook_url || ""],
+      ["File glob", r.file_glob || ""],
+      ["Directory", r.log_dir || ""],
+    ];
+    return rows
+      .filter(([, value]) => String(value).trim())
+      .map(([label, value]) => `<li><span>${esc(label)}</span> ${esc(value)}</li>`)
+      .join("");
+  }
+
+  function alertRuleForm(r) {
+    const rule = r || {
+      name: "",
+      query: "",
+      mode: "text",
+      scope: "all",
+      cooldown_sec: 300,
+      enabled: true,
+      email_to: "",
+      webhook_url: "",
+      file_glob: "",
+      log_dir: "",
+    };
+    const mode = rule.mode === "regex" ? "regex" : "text";
+    const scope = rule.scope === "failures_only" ? "failures_only" : "all";
+    return `
+      <form class="alert-rule-editor" data-rule-id="${esc(rule.id || "")}">
+        <div class="alert-rule-editor-row">
+          <label>Name <input name="name" type="text" value="${esc(rule.name || "")}" required></label>
+          <label class="alert-rule-check">Enabled <input name="enabled" type="checkbox" ${rule.enabled === false ? "" : "checked"}></label>
+        </div>
+        <label>Query <input name="query" type="text" value="${esc(rule.query || "")}" required></label>
+        <div class="alert-rule-editor-row">
+          <label>Mode
+            <select name="mode">
+              <option value="text" ${mode === "text" ? "selected" : ""}>Text</option>
+              <option value="regex" ${mode === "regex" ? "selected" : ""}>Regexp</option>
+            </select>
+          </label>
+          <label>Scope
+            <select name="scope">
+              <option value="all" ${scope === "all" ? "selected" : ""}>All lines</option>
+              <option value="failures_only" ${scope === "failures_only" ? "selected" : ""}>Failures only</option>
+            </select>
+          </label>
+          <label>Cooldown (seconds) <input name="cooldown_sec" type="number" min="0" value="${esc(rule.cooldown_sec ?? 300)}"></label>
+        </div>
+        <label>Email <span class="hint">separate addresses with commas</span><input name="email_to" type="text" value="${esc(rule.email_to || "")}" placeholder="one@example.com, two@example.com"></label>
+        <label>Webhook <input name="webhook_url" type="text" value="${esc(rule.webhook_url || "")}" placeholder="https://discord.com/api/webhooks/…"></label>
+        <div class="alert-rule-editor-row">
+          <label>File glob <input name="file_glob" type="text" value="${esc(rule.file_glob || "")}" placeholder="*.log"></label>
+          <label>Directory <input name="log_dir" type="text" value="${esc(rule.log_dir || "")}" placeholder="/var/log/remote/…"></label>
+        </div>
+        <div class="alert-rule-actions">
+          <button class="btn primary" type="submit">Save</button>
+          <button class="btn" type="button" data-cancel-rule>Cancel</button>
+        </div>
+      </form>
+    `;
+  }
+
+  function bindAlertRuleForm(form) {
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const data = new FormData(form);
+      const body = {
+        name: String(data.get("name") || "").trim(),
+        query: String(data.get("query") || "").trim(),
+        mode: String(data.get("mode") || "text"),
+        scope: String(data.get("scope") || "all"),
+        cooldown_sec: parseInt(String(data.get("cooldown_sec") || "300"), 10) || 0,
+        enabled: form.querySelector("[name=enabled]").checked,
+        email_to: String(data.get("email_to") || "").trim(),
+        webhook_url: String(data.get("webhook_url") || "").trim(),
+        file_glob: String(data.get("file_glob") || "").trim(),
+        log_dir: String(data.get("log_dir") || "").trim(),
+      };
+      const existingId = form.dataset.ruleId;
+      if (existingId) body.id = existingId;
+      if (!body.name || !body.query) {
+        statusEl.textContent = "Name and query are required";
+        return;
+      }
+      statusEl.textContent = "Saving alert rule…";
+      const res = await fetch("/api/alert-rules", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const saved = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        statusEl.textContent = saved.error || "Failed to save alert rule";
+        return;
+      }
+      editingRuleId = null;
+      statusEl.textContent = existingId ? "Alert rule updated" : "Alert rule added";
+      loadRules();
+    });
+    form.querySelector("[data-cancel-rule]")?.addEventListener("click", () => {
+      editingRuleId = null;
+      renderAlertRules();
+    });
+  }
+
+  function renderAlertRules() {
+    if (!rulesList) return;
+    const cards = alertRulesCache.map((r) => {
+      if (editingRuleId === r.id) return alertRuleForm(r);
+      return `
+        <div class="alert-rule-card">
+          <div class="alert-rule-main">
+            <strong>${esc(r.name)}</strong> · ${r.enabled ? "on" : "off"}
+            <ul class="alert-rule-meta">${alertRuleMeta(r)}</ul>
+          </div>
+          <div class="alert-rule-actions">
+            <button data-edit-rule="${esc(r.id)}" class="btn btn-link" type="button">Edit</button>
+            <button data-test-rule="${esc(r.id)}" class="btn btn-link" type="button">Test</button>
+            <button data-del-rule="${esc(r.id)}" class="btn btn-link" type="button">Delete</button>
+          </div>
+        </div>
+      `;
+    });
+    if (editingRuleId === "") cards.push(alertRuleForm(null));
+    rulesList.innerHTML = cards.join("");
+    rulesList.querySelectorAll(".alert-rule-editor").forEach(bindAlertRuleForm);
+    rulesList.querySelectorAll("[data-edit-rule]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        editingRuleId = btn.dataset.editRule;
+        renderAlertRules();
+        rulesList.querySelector(".alert-rule-editor [name=name]")?.focus();
+      });
+    });
     rulesList.querySelectorAll("[data-test-rule]").forEach((btn) => {
       btn.addEventListener("click", async () => {
-        await fetch(`/api/alert-rules/${btn.dataset.testRule}/test`, { method: "POST" });
-        statusEl.textContent = "Test alert sent";
+        const res = await fetch(`/api/alert-rules/${btn.dataset.testRule}/test`, { method: "POST" });
+        const data = await res.json().catch(() => ({}));
+        statusEl.textContent = res.ok ? "Test alert sent" : (data.error || "Test alert failed");
       });
     });
     rulesList.querySelectorAll("[data-del-rule]").forEach((btn) => {
       btn.addEventListener("click", async () => {
+        if (!window.confirm("Delete this alert rule?")) return;
         await fetch(`/api/alert-rules/${btn.dataset.delRule}`, { method: "DELETE" });
+        if (editingRuleId === btn.dataset.delRule) editingRuleId = null;
         loadRules();
       });
     });
+  }
+
+  async function loadRules() {
+    const res = await fetch("/api/alert-rules");
+    const data = await res.json();
+    alertRulesCache = data.rules || [];
+    renderAlertRules();
   }
 
   providerCards?.querySelectorAll(".llm-provider-card").forEach((card) => {
@@ -391,24 +533,10 @@
   document.getElementById("timestamp-parser-add-btn")?.addEventListener("click", () => {
     saveTimestampParser(null);
   });
-  document.getElementById("alert-rule-add-btn")?.addEventListener("click", async () => {
-    const name = prompt("Rule name", "SSH failures");
-    const query = prompt("Query", "Failed AND ssh");
-    if (!name || !query) return;
-    const webhook = prompt(
-      "Webhook URL (optional)\nDiscord: https://discord.com/api/webhooks/…\nOther: JSON webhook",
-      ""
-    ) || null;
-    const email = prompt("Email to (optional)", "") || null;
-    await fetch("/api/alert-rules", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name, query, mode: "text", scope: "all", cooldown_sec: 300,
-        webhook_url: webhook, email_to: email,
-      }),
-    });
-    loadRules();
+  document.getElementById("alert-rule-add-btn")?.addEventListener("click", () => {
+    editingRuleId = "";
+    renderAlertRules();
+    rulesList.querySelector(".alert-rule-editor [name=name]")?.focus();
   });
 
   if (setupMode) {
@@ -431,6 +559,19 @@
       }
     } catch (_) {
       /* ignore */
+    }
+  }
+
+  const alertHint = document.querySelector("#settings-alerts-panel > p.hint");
+  if (alertHint && !alertHint.textContent.includes("commas")) {
+    for (const node of alertHint.childNodes) {
+      if (node.nodeType === Node.TEXT_NODE && node.textContent.includes("Delivery history")) {
+        node.textContent = node.textContent.replace(
+          "Delivery history",
+          "Separate multiple addresses with commas. Delivery history"
+        );
+        break;
+      }
     }
   }
 

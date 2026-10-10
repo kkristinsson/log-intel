@@ -141,10 +141,15 @@ class FileTailer:
             lines = data.split(b"\n")
             self._partial = lines.pop()
 
-            want_raw = bool(self._on_raw_line) and (
-                self._want_raw is None or self._want_raw()
-            )
-            classify = self._want_failures is None or self._want_failures()
+            try:
+                want_raw = bool(self._on_raw_line) and (
+                    self._want_raw is None or self._want_raw()
+                )
+                classify = self._want_failures is None or self._want_failures()
+            except Exception:
+                logger.exception("Tailer decide failed for %s", self._path)
+                want_raw = bool(self._on_raw_line)
+                classify = False
             if not want_raw and not classify:
                 continue
 

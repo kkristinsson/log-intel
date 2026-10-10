@@ -132,7 +132,12 @@ class TailService:
 
     def _want_raw_lines(self) -> bool:
         engine = self._alert_engine
-        return bool(engine and engine.has_rules())
+        if not engine:
+            return False
+        has_rules = getattr(engine, "has_rules", None)
+        if callable(has_rules):
+            return bool(has_rules())
+        return bool(getattr(engine, "_rules", None))
 
     def _start_tailer(self, path: Path) -> None:
         with self._lock:

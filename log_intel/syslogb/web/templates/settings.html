@@ -61,12 +61,12 @@
   </section>
   <section class="settings-panel settings-advanced" id="settings-alerts-panel">
     <h3>Alert rules</h3>
-    <p class="hint">Webhook: paste a <strong>Discord</strong> channel webhook URL (<code>discord.com/api/webhooks/…</code>) for a formatted message, or any URL for JSON. Configure SMTP for email. Delivery history: <a href="/alerts">Alerts</a>.</p>
+    <p class="hint">Webhook: paste a <strong>Discord</strong> channel webhook URL (<code>discord.com/api/webhooks/…</code>) for a formatted message, or any URL for JSON. Configure SMTP for email. Separate multiple addresses with commas. Delivery history: <a href="/alerts">Alerts</a>.</p>
     <div id="alert-rules-list" class="alert-rules-list"></div>
     <button id="alert-rule-add-btn" class="btn" type="button">Add alert rule</button>
   </section>
 </main>
 {% endblock %}
 {% block scripts %}
-<script src="{{ url_for('static', filename='settings.js') }}"></script>
+<script src="{{ url_for('static', filename='settings.js', v='alert-edit') }}"></script>
 {% endblock %}

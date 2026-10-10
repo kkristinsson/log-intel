@@ -425,6 +425,14 @@ body:has(.layout) {
   padding-left: 0.65rem;
 }
 
+.file-list li.file-list-group-all {
+  font-weight: 600;
+}
+
+.file-list li.file-list-group-all .file-name {
+  color: var(--accent);
+}
+
 .analyze-progress {
   margin: 0.75rem 0 0.5rem;
   padding: 0.75rem;
@@ -1539,9 +1547,89 @@ code {
 }
 
 .columnizer-card,
-.alert-rule-card {
-  padding: 0.5rem 0;
+.alert-rule-card,
+.alert-rule-editor {
+  padding: 0.55rem 0;
   border-bottom: 1px solid var(--border);
+}
+
+.alert-rule-card {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.alert-rule-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.alert-rule-meta {
+  list-style: none;
+  margin: 0.3rem 0 0;
+  padding: 0;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.alert-rule-meta li {
+  margin: 0.12rem 0;
+  word-break: break-word;
+}
+
+.alert-rule-meta span {
+  color: var(--text);
+  font-weight: 600;
+  margin-right: 0.35rem;
+}
+
+.alert-rule-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem;
+  flex-shrink: 0;
+}
+
+.alert-rule-editor {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.alert-rule-editor label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.alert-rule-editor input,
+.alert-rule-editor select {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.35rem 0.5rem;
+  font-size: 0.85rem;
+}
+
+.alert-rule-editor-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.45rem;
+}
+
+.alert-rule-check {
+  flex-direction: row !important;
+  align-items: center;
+  gap: 0.4rem !important;
+  align-self: end;
+  padding-bottom: 0.4rem;
+}
+
+.alert-rule-check input {
+  width: auto;
 }
 
 .data-table {

@@ -24,6 +24,7 @@ def test_hub_evaluate_fires_webhook() -> None:
             }
         )
         engine = AlertEngine(store)
+        assert engine.has_rules() is True
         with patch("log_intel.alerts.engine.deliver_webhook", return_value=True):
             engine.evaluate(
                 LogEvent(

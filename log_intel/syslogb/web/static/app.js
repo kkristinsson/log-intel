@@ -102,6 +102,12 @@
   let contextMenuPath = null;
   let filterPath = null;
   let filterGroup = null;
+  let groupViewPath = null;
+  let groupViewLabel = "";
+  let groupLoadGen = 0;
+  let groupLoadAbort = null;
+  let groupLoadBusy = false;
+  let groupLivePaths = null;
   let fileGroups = [];
   let allFilesCache = [];
   /** @type {Map<string, object>} resolved file_path -> schedule */
@@ -271,7 +277,7 @@
   }
 
   function isFileTailFollow() {
-    if (!filterPath || !currentViewEvents.length) return true;
+    if ((!filterPath && !groupViewPath) || !currentViewEvents.length) return true;
     return captureFeedScrollState(feedSingle).tailFollow;
   }
 
@@ -356,7 +362,7 @@
 
   function updateTimeWindowUi() {
     if (!logTimeWindowWrap) return;
-    logTimeWindowWrap.classList.toggle("hidden", !filterPath);
+    logTimeWindowWrap.classList.toggle("hidden", !filterPath && !groupViewPath);
   }
 
   function buildFilePageUrl(path, direction) {
@@ -1949,6 +1955,10 @@
 
   function stopLive() {
     stopPoll();
+    if (groupLoadAbort) {
+      groupLoadAbort.abort();
+      groupLoadAbort = null;
+    }
     if (es) {
       es.close();
       es = null;
@@ -1962,7 +1972,7 @@
   }
 
   function maybeConnectAllFilesStream() {
-    if (searchActive || filterPath) return;
+    if (searchActive || filterPath || groupViewPath) return;
     if (!liveFailuresOn) {
       stopLive();
       showSingleView();
@@ -1998,7 +2008,7 @@
   function connectStream() {
     if (searchActive) return;
     stopLive();
-    if (filterPath) return;
+    if (filterPath || groupViewPath) return;
     showSingleView();
     clearFeed(feedSingle);
     fileViewport = null;
@@ -2166,6 +2176,8 @@
     clearFeed(feedSingle);
     if (filterPath) {
       selectFile(filterPath, basename(filterPath), true);
+    } else if (groupViewPath) {
+      selectGroupAll(groupViewPath, groupViewLabel);
     } else {
       viewLabel.textContent = "All files (failures only)";
       maybeConnectAllFilesStream();
@@ -2203,8 +2215,13 @@
       el.classList.toggle("selected", el.dataset.path === (filterPath || ""));
     });
     document.querySelectorAll(".file-list li.file-group").forEach((el) => {
-      const active = Boolean(filterGroup && el.dataset.groupPath === filterGroup && !filterPath);
+      const active = Boolean(
+        filterGroup && el.dataset.groupPath === filterGroup && !filterPath && !groupViewPath
+      );
       el.classList.toggle("selected", active);
+    });
+    document.querySelectorAll(".file-list li.file-list-group-all").forEach((el) => {
+      el.classList.toggle("selected", el.dataset.groupPath === (groupViewPath || ""));
     });
     const allRow = document.querySelector(".file-list li.file-list-all");
     if (allRow) {
@@ -2379,7 +2396,179 @@
     }
   }
 
+  function filesForGroup(groupPath) {
+    return allFilesCache.filter((f) => f.group_path === groupPath && f.readable);
+  }
+
+  function appendGroupAllRow(parent, groupPath, label, fileCount) {
+    const li = document.createElement("li");
+    li.className = "file-list-file file-list-group-all";
+    li.dataset.groupPath = groupPath;
+    const name = document.createElement("span");
+    name.className = "file-name";
+    name.textContent = "All logs";
+    li.appendChild(name);
+    const meta = document.createElement("span");
+    meta.className = "file-meta";
+    const count = document.createElement("span");
+    count.className = "file-size";
+    count.textContent = String(fileCount);
+    meta.appendChild(count);
+    li.appendChild(meta);
+    li.title = `Show every log file from ${label}`;
+    if (groupViewPath === groupPath) li.classList.add("selected");
+    li.addEventListener("click", (e) => {
+      e.stopPropagation();
+      selectGroupAll(groupPath, label);
+    });
+    parent.appendChild(li);
+  }
+
+  async function mapPool(items, limit, fn) {
+    const results = new Array(items.length);
+    let cursor = 0;
+    const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+      while (cursor < items.length) {
+        const i = cursor;
+        cursor += 1;
+        results[i] = await fn(items[i]);
+      }
+    });
+    await Promise.all(workers);
+    return results;
+  }
+
+  async function loadGroupPage({ replace = true, silent = false } = {}) {
+    const groupPath = groupViewPath;
+    const label = groupViewLabel;
+    if (!groupPath) return null;
+    if (groupLoadAbort) groupLoadAbort.abort();
+    const abort = new AbortController();
+    groupLoadAbort = abort;
+    const gen = ++groupLoadGen;
+    groupLoadBusy = true;
+    try {
+    const allGroupFiles = filesForGroup(groupPath);
+    if (silent && groupLivePaths && groupLivePaths.length === 0) return null;
+    const files = silent && groupLivePaths?.length
+      ? allGroupFiles.filter((f) => groupLivePaths.includes(f.path))
+      : allGroupFiles;
+    if (!files.length) {
+      clearFeed(feedSingle);
+      streamStatus.textContent = "No readable log files";
+      return null;
+    }
+    if (!silent) startActivity(`Loading all logs from ${label}…`);
+    const preserveScroll = replace && currentViewEvents.length > 0;
+    const scrollState = preserveScroll ? captureFeedScrollState(feedSingle) : null;
+    const order = sortOrder.value;
+    let failed = 0;
+    let skippedWindow = 0;
+    const pages = await mapPool(files, 3, async (f) => {
+      let url = `/api/file/page?path=${encodeURIComponent(f.path)}&order=${order}&direction=tail&failures_only=0`;
+      url = appendImportance(url);
+      url = appendFileWindow(url, "tail");
+      try {
+        const res = await fetch(url, { signal: abort.signal });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || res.statusText);
+        return data;
+      } catch (err) {
+        if (err?.name === "AbortError") throw err;
+        failed += 1;
+        return null;
+      }
+    }).catch((err) => {
+      if (err?.name === "AbortError") return null;
+      throw err;
+    });
+    if (!pages || gen !== groupLoadGen || groupViewPath !== groupPath) {
+      if (!silent && gen === groupLoadGen) stopActivity({ stage: "Cancelled" });
+      return null;
+    }
+    const merged = [];
+    const windowOn = Boolean(fileWindowParam());
+    const livePaths = [];
+    for (const page of pages) {
+      if (!page) continue;
+      if (windowOn && page.window_fallback) {
+        skippedWindow += 1;
+        continue;
+      }
+      if (page.path) livePaths.push(page.path);
+      for (const ev of page.events || []) {
+        merged.push({ ...ev, id: `${ev.source || ""}|${ev.id}` });
+      }
+    }
+    merged.sort((a, b) => (a.received_at ?? 0) - (b.received_at ?? 0));
+    const capped = merged.length > maxRows;
+    const kept = capped ? merged.slice(merged.length - maxRows) : merged;
+    const display = order === "desc" ? [...kept].reverse() : kept;
+    populateFeed(feedSingle, display, rowActionOpts({ showSource: true, skipSeen: true }));
+    scheduleFeedScrollRestore(
+      feedSingle,
+      scrollState || { tailFollow: true, desc: order === "desc" }
+    );
+    const win = fileWindowParam();
+    const winLabel = win ? ` · ${win}` : "";
+    let status = `${kept.length} lines from ${files.length - failed} files${winLabel}`;
+    if (capped) status += ` · showing newest ${maxRows}`;
+    if (failed) status += ` · ${failed} unreadable`;
+    if (skippedWindow) {
+      status += ` · ${skippedWindow} file${skippedWindow === 1 ? "" : "s"} outside time range`;
+    }
+    if (!silent) groupLivePaths = livePaths;
+    streamStatus.textContent = status;
+    if (!silent) stopActivity({ stage: status });
+    return { events: display };
+    } finally {
+      if (groupLoadAbort === abort) groupLoadAbort = null;
+      if (groupLoadGen === gen) groupLoadBusy = false;
+    }
+  }
+
+  async function selectGroupAll(groupPath, label) {
+    if (searchActive && searchInput.value.trim()) {
+      selectGroup(groupPath, label);
+      return;
+    }
+    stopLive();
+    groupLivePaths = null;
+    groupViewPath = groupPath;
+    groupViewLabel = label || "";
+    filterGroup = groupPath || null;
+    filterPath = null;
+    selectedPath = null;
+    selectedReadable = true;
+    selectedJournal = false;
+    updateAnalyzeButtonsEnabled();
+    clearRowSelection();
+    Object.keys(columnFilters).forEach((k) => { delete columnFilters[k]; });
+    showSingleView();
+    clearFeed(feedSingle);
+    feedSingle.classList.remove("single-file");
+    fileViewport = null;
+    updatePagingUi();
+    const viewing = `Viewing: ${label} / All logs`;
+    viewLabel.textContent = viewing;
+    viewLabel.dataset.baseLabel = viewing;
+    if (groupPath && searchScope.querySelector(`option[value="${CSS.escape(groupPath)}"]`)) {
+      searchScope.value = groupPath;
+    }
+    syncSidebarSelection();
+    updateSelectedFileScopeOption();
+    updateTimeWindowUi();
+    await loadGroupPage({ replace: true });
+    pollTimer = setInterval(() => {
+      if (groupViewPath !== groupPath || groupLoadBusy) return;
+      if (!isFileTailFollow()) return;
+      loadGroupPage({ replace: true, silent: true });
+    }, 15000);
+  }
+
   function selectGroup(groupPath, label) {
+    groupViewPath = null;
+    groupViewLabel = "";
     if (searchActive && searchInput.value.trim()) {
       filterGroup = groupPath || null;
       filterPath = null;
@@ -2425,6 +2614,8 @@
 
   async function selectFile(path, name, readable = true, { focusEv = null } = {}) {
     if (searchActive) {
+      groupViewPath = null;
+      groupViewLabel = "";
       filterPath = path;
       let fileMeta = null;
       if (path) {
@@ -2448,6 +2639,8 @@
     }
 
     stopLive();
+    groupViewPath = null;
+    groupViewLabel = "";
     filterPath = path;
     let fileMeta = null;
     if (path) {
@@ -2565,7 +2758,8 @@
         const files = byGroup.get(g.path)?.files || [];
         const expanded = expandedGroups.has(g.path)
           || (prevFilter && files.some((f) => f.path === prevFilter))
-          || (prevGroup === g.path && prevFilter);
+          || (prevGroup === g.path && prevFilter)
+          || groupViewPath === g.path;
         if (expanded) expandedGroups.add(g.path);
 
         const groupLi = document.createElement("li");
@@ -2599,6 +2793,9 @@
         nested.className = "file-list file-list-nested";
         nested.dataset.groupFor = g.path;
         nested.hidden = !expanded;
+        if (!String(g.path).startsWith("journal://")) {
+          appendGroupAllRow(nested, g.path, g.label, files.length);
+        }
         if (isLocalhostGroupPath(g.path)) {
           appendLocalhostGroupFiles(nested, files, prevFilter);
         } else {
@@ -2707,6 +2904,8 @@
   sortOrder.addEventListener("change", async () => {
     if (searchActive && searchInput.value.trim()) {
       await runSearch();
+    } else if (groupViewPath) {
+      await loadGroupPage({ replace: true });
     } else if (filterPath) {
       await loadFilePage(filterPath, { direction: "tail", replace: true });
     } else {
@@ -2722,7 +2921,9 @@
 
   if (logTimeWindow) {
     logTimeWindow.addEventListener("change", () => {
-      if (filterPath) {
+      if (groupViewPath) {
+        loadGroupPage({ replace: true });
+      } else if (filterPath) {
         fileViewport = null;
         loadFilePage(filterPath, { direction: "tail", replace: true });
       }
@@ -2764,6 +2965,8 @@
       }
       if (searchActive && searchInput.value.trim()) {
         runSearch();
+      } else if (groupViewPath) {
+        loadGroupPage({ replace: true });
       } else if (filterPath) {
         loadFilePage(filterPath, { direction: "tail", replace: true });
       }
@@ -2779,6 +2982,8 @@
     importanceMinSelect.addEventListener("change", async () => {
       if (searchActive && searchInput.value.trim()) {
         await runSearch();
+      } else if (groupViewPath) {
+        await loadGroupPage({ replace: true });
       } else if (filterPath) {
         await loadFilePage(filterPath, { direction: "tail", replace: true });
       } else {
@@ -2867,7 +3072,7 @@
         window.localStorage.setItem(LIVE_FAILURES_KEY, liveFailuresOn ? "1" : "0");
       } catch (_) { /* ignore quota / private mode */ }
       updateLiveFailuresBtn();
-      if (!searchActive && !filterPath) {
+      if (!searchActive && !filterPath && !groupViewPath) {
         maybeConnectAllFilesStream();
       }
     });

@@ -41,6 +41,9 @@ class AlertEngine:
         self._rules = [r for r in self._store.list_alert_rules() if r.get("enabled")]
         return self._rules
 
+    def has_rules(self) -> bool:
+        return bool(self._rules)
+
     def evaluate(self, ev: LogEvent) -> None:
         settings = get_settings()
         line = ev.message or ev.raw or ""
